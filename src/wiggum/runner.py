@@ -14,6 +14,7 @@ from loguru import logger
 from wiggum.codex_process import (
     build_codex_command,
     build_codex_environment,
+    is_retryable_codex_failure,
     resolve_codex_executable,
     run_codex,
 )
@@ -27,6 +28,7 @@ from wiggum.exit_codes import ExitCode
 from wiggum.git_ops import (
     commit_count,
     commit_loop_changes,
+    has_worktree_changes,
     require_clean_worktree,
     require_git_output,
 )
@@ -54,7 +56,7 @@ def _run(
     model: str | None,
     auto_approve: bool,
     dry_run: bool,
-    api_retry_count: int,
+    api_retry_count: int | None,
     api_retry_interval_sec: int,
     codex_timeout_sec: int,
     tasks_path: Path,
@@ -82,8 +84,9 @@ def _run(
         Automatically approve Codex requests in the workspace-write sandbox.
     dry_run : bool
         Validate inputs and print the command without invoking Codex.
-    api_retry_count : int
+    api_retry_count : int | None
         Number of additional attempts after a Codex API or protocol failure.
+        ``None`` disables retries.
     api_retry_interval_sec : int
         Seconds to wait between Codex API retry attempts.
     codex_timeout_sec : int
@@ -110,7 +113,7 @@ def _run(
     if max_loops < 1:
         logger.error("--max-loops must be at least 1")
         return ExitCode.PREFLIGHT_ERROR
-    if api_retry_count < 0:
+    if api_retry_count is not None and api_retry_count < 0:
         logger.error("--api-retry-count must be at least 0")
         return ExitCode.PREFLIGHT_ERROR
     if api_retry_interval_sec < 0:
@@ -204,7 +207,8 @@ def _run(
             temporary_log_path.unlink(missing_ok=True)
             return ExitCode.SUCCESS
 
-        for api_attempt in range(1, api_retry_count + 2):
+        retry_count = 0 if api_retry_count is None else api_retry_count
+        for api_attempt in range(1, retry_count + 2):
             try:
                 completed = run_codex(
                     command,
@@ -216,6 +220,7 @@ def _run(
                 if completed.returncode != 0:
                     failure = f"Codex exited with code {completed.returncode}"
                     exit_code = ExitCode.CODEX_FAILURE
+                    retryable = is_retryable_codex_failure(temporary_log_path)
                 else:
                     message = output_path.read_text(encoding="utf-8")
                     status, task_id = classify_output(message)
@@ -224,11 +229,13 @@ def _run(
             except subprocess.TimeoutExpired:
                 failure = f"Codex timed out after {codex_timeout_sec} seconds"
                 exit_code = ExitCode.CODEX_FAILURE
+                retryable = True
             except (OSError, UnicodeError, ValueError) as error:
                 failure = str(error)
                 exit_code = ExitCode.PROTOCOL_ERROR
+                retryable = False
 
-            if api_attempt > api_retry_count:
+            if not retryable or api_attempt > retry_count:
                 log_path = finalize_log(
                     temporary_log_path,
                     logs_dir,
@@ -241,9 +248,9 @@ def _run(
                 return exit_code
 
             logger.warning(
-                "Codex API attempt {}/{} failed ({}); retrying in {} seconds",
+                "Codex retry attempt {}/{} failed ({}); retrying in {} seconds",
                 api_attempt,
-                api_retry_count + 1,
+                retry_count + 1,
                 failure,
                 api_retry_interval_sec,
             )
@@ -261,7 +268,9 @@ def _run(
                 raise RuntimeError(
                     f"Codex created {agent_commits} commits; the runner owns loop commits"
                 )
-            commit_loop_changes(repo, task_id, status)
+            has_changes = status == "completed" or has_worktree_changes(repo)
+            if has_changes:
+                commit_loop_changes(repo, task_id, status)
             require_clean_worktree(repo)
             after = require_git_output(repo, "rev-parse", "HEAD")
             new_commits = commit_count(repo, before, after)
@@ -307,11 +316,13 @@ def _run(
             )
             continue
 
-        if new_commits != 1:
+        expected_commits = 1 if has_changes else 0
+        if new_commits != expected_commits:
             log_path = finalize_log(temporary_log_path, logs_dir, started_at, task_id, "git-error")
             logger.error(
-                "Terminal loop created {} commits; see {}",
+                "Terminal loop created {} commits, expected {}; see {}",
                 new_commits,
+                expected_commits,
                 log_path.relative_to(repo),
             )
             return ExitCode.GIT_STATE_ERROR
@@ -336,7 +347,7 @@ def run(
     model: str | None = None,
     auto_approve: bool = False,
     dry_run: bool = False,
-    api_retry_count: int = DEFAULT_API_RETRY_COUNT,
+    api_retry_count: int | None = DEFAULT_API_RETRY_COUNT,
     api_retry_interval_sec: int = DEFAULT_API_RETRY_INTERVAL_SEC,
     codex_timeout_sec: int = DEFAULT_CODEX_TIMEOUT_SEC,
     tasks_path: Path | None = None,
@@ -364,8 +375,9 @@ def run(
         Automatically approve Codex requests in the workspace-write sandbox.
     dry_run : bool, default False
         Validate inputs and print the command without invoking Codex.
-    api_retry_count : int, default 1
+    api_retry_count : int | None, default None
         Number of additional attempts after a Codex API or protocol failure.
+        ``None`` disables retries.
     api_retry_interval_sec : int, default 5
         Seconds to wait between Codex API retry attempts.
     codex_timeout_sec : int, default 1800

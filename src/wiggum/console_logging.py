@@ -11,7 +11,7 @@ _CONSOLE_FORMAT = (
     "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
     "<level>{level: <8}</level> | "
     "<cyan>{file.name}:{line}</cyan> | "
-    "<level>{level.icon} {message}</level>"
+    "<level>{message}</level>"
 )
 _STANDARD_LEVELS = frozenset({"TRACE", "DEBUG", "INFO", "SUCCESS"})
 

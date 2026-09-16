@@ -166,3 +166,28 @@ def run_codex(
             env=environment,
             timeout=timeout_sec,
         )
+
+
+def is_retryable_codex_failure(log_path: Path) -> bool:
+    """Return whether a Codex log contains a transient transport failure.
+
+    Parameters
+    ----------
+    log_path : Path
+        UTF-8 log emitted by a failed Codex child process.
+
+    Returns
+    -------
+    bool
+        ``True`` when the log contains a known transient connection failure.
+    """
+    try:
+        output = log_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        return False
+    markers = (
+        "stream disconnected",
+        "Connection failed: error sending request",
+        "failed to connect to websocket",
+    )
+    return any(marker in output for marker in markers)

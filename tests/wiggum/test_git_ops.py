@@ -10,6 +10,7 @@ import pytest
 from wiggum.git_ops import (
     commit_count,
     commit_loop_changes,
+    has_worktree_changes,
     require_clean_worktree,
     require_git_output,
 )
@@ -45,6 +46,17 @@ def test_require_clean_worktree_rejects_untracked_files(tmp_path: Path) -> None:
 
     with pytest.raises(RuntimeError, match="working tree is not clean"):
         require_clean_worktree(tmp_path)
+
+
+def test_has_worktree_changes_detects_untracked_files(tmp_path: Path) -> None:
+    """Report changes from the same Git status contract as preflight."""
+    _init_repo(tmp_path)
+
+    assert not has_worktree_changes(tmp_path)
+
+    (tmp_path / "untracked.txt").write_text("data\n", encoding="utf-8")
+
+    assert has_worktree_changes(tmp_path)
 
 
 def test_commit_loop_changes_commits_staged_and_untracked_files(tmp_path: Path) -> None:

@@ -15,6 +15,10 @@ them for your project.
 uv add wiggum
 ```
 
+```bash
+uv add git+https://github.com/ribuka/wiggum.git
+```
+
 ## Scaffold a repository
 
 ```bash

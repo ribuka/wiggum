@@ -9,6 +9,7 @@ from pathlib import Path
 from wiggum.codex_process import (
     build_codex_command,
     build_codex_environment,
+    is_retryable_codex_failure,
     resolve_codex_executable,
     run_codex,
 )
@@ -98,3 +99,15 @@ def test_run_codex_writes_combined_output_to_the_log_file(tmp_path: Path) -> Non
 
     assert completed.returncode == 0
     assert "hello from codex" in log_path.read_text(encoding="utf-8")
+
+
+def test_is_retryable_codex_failure_matches_only_transport_errors(tmp_path: Path) -> None:
+    """Recognize known transient connection failures in Codex logs."""
+    log_path = tmp_path / "codex.log"
+    log_path.write_text("stream disconnected before completion", encoding="utf-8")
+
+    assert is_retryable_codex_failure(log_path)
+
+    log_path.write_text("invalid local configuration", encoding="utf-8")
+
+    assert not is_retryable_codex_failure(log_path)
