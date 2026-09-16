@@ -10,11 +10,11 @@ from wiggum.scaffold import scaffold
 
 
 def test_scaffold_writes_all_template_files(tmp_path: Path) -> None:
-    """Write RALPH.md, RALPH_PROJECT.md, ralph_prompt.md, and TASKS.md."""
+    """Write the repository-specific Ralph configuration files."""
     written = scaffold(tmp_path)
 
     names = {path.name for path in written}
-    assert names == {"RALPH.md", "RALPH_PROJECT.md", "ralph_prompt.md", "TASKS.md"}
+    assert names == {"RALPH_PROJECT.md", "ralph_prompt.md", "TASKS.md"}
     for path in written:
         assert path.parent == tmp_path
         assert path.read_text(encoding="utf-8").strip() != ""

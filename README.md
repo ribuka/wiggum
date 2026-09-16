@@ -25,10 +25,25 @@ uv add git+https://github.com/ribuka/wiggum.git
 uv run wiggum init
 ```
 
-This writes `RALPH.md`, `RALPH_PROJECT.md`, `ralph_prompt.md`, and `TASKS.md`
-into the target repository (`--repo` defaults to the current directory). Edit
+This writes `RALPH_PROJECT.md`, `ralph_prompt.md`, and `TASKS.md` into the
+target repository (`--repo` defaults to the current directory). The general
+Ralph rules are bundled with wiggum. Edit
 `RALPH_PROJECT.md` and `TASKS.md` to match your project before running loops.
 Use `--force` to overwrite files that already exist.
+
+### Repository-root files
+
+For the standard `wiggum run` command, the target repository must contain:
+
+- `.git/` — the repository metadata; `--repo` must name this Git root.
+- `TASKS.md` — the task ledger, unless `--tasks-file` selects another path.
+- `RALPH_PROJECT.md` — repository-specific instructions, including validation
+  commands and the files each loop must read.
+
+`RALPH.md` is not required in the target repository; wiggum provides the
+general Ralph rules. `ralph_prompt.md` is optional and is only used when passed
+with `--prompt-file`. Any files named by `RALPH_PROJECT.md`, such as `SPEC.md`
+or `AGENTS.md`, are required only when that configuration says to read them.
 
 ## Run Ralph loops
 

@@ -6,7 +6,6 @@ from importlib import resources
 from pathlib import Path
 
 _TEMPLATE_FILES: dict[str, str] = {
-    "RALPH.md": "RALPH.md",
     "RALPH_PROJECT.md": "RALPH_PROJECT.md.template",
     "ralph_prompt.md": "ralph_prompt.md",
     "TASKS.md": "TASKS.md.template",

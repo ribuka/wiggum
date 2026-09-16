@@ -1,7 +1,7 @@
 # Ralph Project Configuration
 
-This document applies the general rules in `RALPH.md` to this repository. It is
-the authoritative source for repository-specific Ralph files, commands, state
+This document applies wiggum's bundled general rules to this repository. It is
+the authoritative source for repository-specific files, commands, state
 formats, fixtures, runner behavior, and Git operations.
 
 <!--
@@ -13,16 +13,12 @@ formats, fixtures, runner behavior, and Git operations.
 
 At the start of each loop, read the following files one at a time in this order:
 
-1. `RALPH.md`
-2. `RALPH_PROJECT.md`
-3. `AGENTS.md` <!-- TODO: add or remove repository instruction files -->
-4. `SPEC.md` <!-- TODO: replace with this project's specification, or remove -->
-5. `TASKS.md`
-6. `PROGRESS.md` if it exists
-7. Existing code and tests related to the selected task
-
-The runner prompt separately requires `RALPH.md` to be the first repository
-operation. After reading it, continue with this list without rereading it.
+1. `RALPH_PROJECT.md`
+2. `AGENTS.md` <!-- TODO: add or remove repository instruction files -->
+3. `SPEC.md` <!-- TODO: replace with this project's specification, or remove -->
+4. `TASKS.md`
+5. `PROGRESS.md` if it exists
+6. Existing code and tests related to the selected task
 
 Do not search the repository for Ralph instructions before reading the files
 listed above. After selecting a task, begin with implementation and test files

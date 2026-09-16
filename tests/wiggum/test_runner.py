@@ -117,7 +117,18 @@ def test_run_uses_the_bundled_default_prompt_when_prompt_path_is_none(
 
     assert result == ExitCode.SUCCESS
     printed_command = capsys.readouterr().out
+    assert "# Ralph Loop Rules" in printed_command
     assert "Run exactly one Ralph loop in this repository." in printed_command
+    assert "The parent runner selected `TASK-001`" in printed_command
+
+
+def test_default_prompt_uses_bundled_rules_without_an_external_ralph_file() -> None:
+    """Use package-owned general rules instead of a repository RALPH.md file."""
+    prompt = runner_module._default_prompt_text()
+
+    assert "# Ralph Loop Rules" in prompt
+    assert "They replace an external `RALPH.md`" in prompt
+    assert "Read `RALPH_PROJECT.md` with explicit UTF-8 encoding as your first" in prompt
 
 
 def test_run_logs_runner_progress_loop_and_selected_task_once(
