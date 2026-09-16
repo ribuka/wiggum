@@ -75,6 +75,22 @@ def require_clean_worktree(repo: Path) -> None:
         raise RuntimeError("working tree is not clean:\n" + status)
 
 
+def has_worktree_changes(repo: Path) -> bool:
+    """Return whether a repository has tracked or untracked changes.
+
+    Parameters
+    ----------
+    repo : Path
+        Repository working directory.
+
+    Returns
+    -------
+    bool
+        ``True`` when Git porcelain status contains an entry.
+    """
+    return bool(require_git_output(repo, "status", "--porcelain", "--untracked-files=all"))
+
+
 def commit_count(repo: Path, before: str, after: str) -> int:
     """Count commits added between two repository states.
 

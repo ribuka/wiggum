@@ -14,6 +14,7 @@ from loguru import logger
 from wiggum.codex_process import (
     build_codex_command,
     build_codex_environment,
+    is_retryable_codex_failure,
     resolve_codex_executable,
     run_codex,
 )
@@ -27,6 +28,7 @@ from wiggum.exit_codes import ExitCode
 from wiggum.git_ops import (
     commit_count,
     commit_loop_changes,
+    has_worktree_changes,
     require_clean_worktree,
     require_git_output,
 )
@@ -216,6 +218,7 @@ def _run(
                 if completed.returncode != 0:
                     failure = f"Codex exited with code {completed.returncode}"
                     exit_code = ExitCode.CODEX_FAILURE
+                    retryable = is_retryable_codex_failure(temporary_log_path)
                 else:
                     message = output_path.read_text(encoding="utf-8")
                     status, task_id = classify_output(message)
@@ -224,11 +227,13 @@ def _run(
             except subprocess.TimeoutExpired:
                 failure = f"Codex timed out after {codex_timeout_sec} seconds"
                 exit_code = ExitCode.CODEX_FAILURE
+                retryable = True
             except (OSError, UnicodeError, ValueError) as error:
                 failure = str(error)
                 exit_code = ExitCode.PROTOCOL_ERROR
+                retryable = False
 
-            if api_attempt > api_retry_count:
+            if not retryable or api_attempt > api_retry_count:
                 log_path = finalize_log(
                     temporary_log_path,
                     logs_dir,
@@ -241,7 +246,7 @@ def _run(
                 return exit_code
 
             logger.warning(
-                "Codex API attempt {}/{} failed ({}); retrying in {} seconds",
+                "Codex retry attempt {}/{} failed ({}); retrying in {} seconds",
                 api_attempt,
                 api_retry_count + 1,
                 failure,
@@ -261,7 +266,9 @@ def _run(
                 raise RuntimeError(
                     f"Codex created {agent_commits} commits; the runner owns loop commits"
                 )
-            commit_loop_changes(repo, task_id, status)
+            has_changes = status == "completed" or has_worktree_changes(repo)
+            if has_changes:
+                commit_loop_changes(repo, task_id, status)
             require_clean_worktree(repo)
             after = require_git_output(repo, "rev-parse", "HEAD")
             new_commits = commit_count(repo, before, after)
@@ -307,11 +314,13 @@ def _run(
             )
             continue
 
-        if new_commits != 1:
+        expected_commits = 1 if has_changes else 0
+        if new_commits != expected_commits:
             log_path = finalize_log(temporary_log_path, logs_dir, started_at, task_id, "git-error")
             logger.error(
-                "Terminal loop created {} commits; see {}",
+                "Terminal loop created {} commits, expected {}; see {}",
                 new_commits,
+                expected_commits,
                 log_path.relative_to(repo),
             )
             return ExitCode.GIT_STATE_ERROR

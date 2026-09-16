@@ -432,3 +432,115 @@ def test_run_reports_protocol_error_for_an_invalid_terminal_token(
     log_names = [path.name for path in (tmp_path / "logs").iterdir()]
     assert len(log_names) == 1
     assert log_names[0].endswith("_011_protocol-error.log")
+
+
+def test_run_does_not_retry_a_non_transient_codex_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Stop after a child failure that has no transient transport marker."""
+    prompt_path = tmp_path / "prompt.md"
+    prompt_path.write_text("one loop", encoding="utf-8")
+    _write_tasks(
+        tmp_path / "TASKS.md",
+        """## TASK-010: failed task
+
+- Status: pending
+- Priority: 1
+- Depends on: none
+""",
+    )
+    codex_calls = 0
+
+    def fake_run_codex(
+        command: list[str],
+        repo: Path,
+        log_path: Path,
+        environment: dict[str, str],
+        timeout_sec: int,
+    ) -> subprocess.CompletedProcess[str]:
+        """Write a local error and return a failed child process."""
+        nonlocal codex_calls
+        del repo, environment, timeout_sec
+        codex_calls += 1
+        log_path.write_text("invalid local configuration\n", encoding="utf-8")
+        return subprocess.CompletedProcess(command, 1)
+
+    monkeypatch.setattr(runner_module, "resolve_codex_executable", lambda value: value)
+    monkeypatch.setattr(runner_module, "require_git_output", _fake_git_output_factory(tmp_path))
+    monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
+    monkeypatch.setattr(
+        runner_module,
+        "build_codex_environment",
+        lambda *args, **kwargs: {},
+    )
+    monkeypatch.setattr(runner_module, "run_codex", fake_run_codex)
+
+    result = run(repo=tmp_path, prompt_path=prompt_path, max_loops=1, api_retry_count=1)
+
+    assert result == ExitCode.CODEX_FAILURE
+    assert codex_calls == 1
+
+
+def test_run_allows_incomplete_task_without_changes_or_commit(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Preserve a valid incomplete result when the agent changed no files."""
+    prompt_path = tmp_path / "prompt.md"
+    prompt_path.write_text("one loop", encoding="utf-8")
+    _write_tasks(
+        tmp_path / "TASKS.md",
+        """## TASK-010: incomplete task
+
+- Status: pending
+- Priority: 1
+- Depends on: none
+""",
+    )
+
+    def fake_git_output(repo: Path, *args: str) -> str:
+        """Report a clean worktree and stable Git history."""
+        if args == ("rev-parse", "--show-toplevel"):
+            return str(repo)
+        if args == ("rev-parse", "HEAD"):
+            return "before"
+        raise AssertionError(args)
+
+    def fake_run_codex(
+        command: list[str],
+        repo: Path,
+        log_path: Path,
+        environment: dict[str, str],
+        timeout_sec: int,
+    ) -> subprocess.CompletedProcess[str]:
+        """Return a valid incomplete token without changing the worktree."""
+        del repo, environment, timeout_sec
+        output_path = Path(command[command.index("--output-last-message") + 1])
+        output_path.write_text("TASK_INCOMPLETE: TASK-010\n", encoding="utf-8")
+        log_path.write_text("agent could not continue\n", encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(runner_module, "resolve_codex_executable", lambda value: value)
+    monkeypatch.setattr(runner_module, "require_git_output", fake_git_output)
+    monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
+    monkeypatch.setattr(runner_module, "has_worktree_changes", lambda repo: False)
+    monkeypatch.setattr(
+        runner_module,
+        "build_codex_environment",
+        lambda *args, **kwargs: {},
+    )
+    monkeypatch.setattr(runner_module, "run_codex", fake_run_codex)
+    monkeypatch.setattr(
+        runner_module,
+        "commit_loop_changes",
+        lambda *args: pytest.fail("a clean incomplete result must not be committed"),
+    )
+    monkeypatch.setattr(runner_module, "commit_count", lambda repo, before, after: 0)
+
+    result = run(repo=tmp_path, prompt_path=prompt_path, max_loops=1)
+
+    assert result == ExitCode.TASK_INCOMPLETE
+    log_names = [path.name for path in (tmp_path / "logs").iterdir()]
+    assert len(log_names) == 1
+    assert log_names[0].endswith("_010_incompleted.log")

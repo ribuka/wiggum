@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterator
+from io import BytesIO, TextIOWrapper
 
 import pytest
 from loguru import logger
@@ -81,6 +82,25 @@ def test_console_logging_reconfiguration_does_not_duplicate_output(
     logger.info("only once")
 
     assert capsys.readouterr().out.count("only once") == 1
+
+
+def test_console_logging_supports_cp932_console_streams(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Write status messages without unsupported Unicode characters."""
+    buffer = BytesIO()
+    stream = TextIOWrapper(buffer, encoding="cp932")
+    monkeypatch.setattr("wiggum.console_logging.sys.stdout", stream)
+    monkeypatch.setattr("wiggum.console_logging.sys.stderr", stream)
+
+    configure_console_logging()
+    logger.info("task started")
+    logger.warning("task blocked")
+    stream.flush()
+
+    output = buffer.getvalue().decode("cp932")
+    assert "task started" in output
+    assert "task blocked" in output
 
 
 def test_wiggum_main_uses_formatted_console_logging(

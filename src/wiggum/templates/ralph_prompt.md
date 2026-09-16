@@ -1,5 +1,11 @@
 Run exactly one Ralph loop in this repository.
 
+You are the implementation agent for the loop already started by the parent
+runner. Work on the selected task directly. Do not run `scripts.ralph_runner`,
+`wiggum run`, `codex exec`, or any other command that starts another Codex
+agent or Ralph loop. The parent runner owns task selection, process lifecycle,
+and commits.
+
 Your first repository operation must be reading `RALPH.md` with explicit UTF-8
 encoding. Do not search the repository for Ralph instructions first. Treat
 `RALPH.md` as the authoritative general loop procedure, then read
