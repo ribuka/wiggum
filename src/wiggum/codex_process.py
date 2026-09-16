@@ -9,7 +9,12 @@ import tempfile
 from collections.abc import Sequence
 from pathlib import Path
 
-from wiggum.defaults import DEFAULT_CODEX_TIMEOUT_SEC
+from wiggum.defaults import (
+    DEFAULT_CODEX_TIMEOUT_SEC,
+    DEFAULT_MODEL_VERBOSITY,
+    DEFAULT_REASONING_EFFORT,
+    DEFAULT_TOOL_OUTPUT_TOKEN_LIMIT,
+)
 
 
 def resolve_codex_executable(executable: str) -> str | None:
@@ -41,6 +46,11 @@ def build_codex_command(
     output_path: Path,
     model: str | None,
     auto_approve: bool = False,
+    *,
+    reasoning_effort: str = DEFAULT_REASONING_EFFORT,
+    model_verbosity: str = DEFAULT_MODEL_VERBOSITY,
+    tool_output_token_limit: int = DEFAULT_TOOL_OUTPUT_TOKEN_LIMIT,
+    lean: bool = False,
 ) -> list[str]:
     """Build the non-interactive Codex command for one loop.
 
@@ -56,6 +66,15 @@ def build_codex_command(
         Optional model override.
     auto_approve : bool, default False
         Automatically approve Codex requests in the workspace-write sandbox.
+    reasoning_effort : str, default "medium"
+        Reasoning effort passed as an inline Codex configuration override.
+    model_verbosity : str, default "low"
+        Model verbosity passed as an inline Codex configuration override.
+    tool_output_token_limit : int, default 12000
+        Maximum tokens retained from each tool output in model history.
+    lean : bool, default False
+        Ignore user configuration and disable reasoning summaries to avoid
+        loading optional tools and context that the Ralph loop does not need.
 
     Returns
     -------
@@ -66,6 +85,7 @@ def build_codex_command(
         executable,
         "exec",
         "--ephemeral",
+        "--json",
         "--disable",
         "unbounded_connection_retries",
         "--cd",
@@ -73,12 +93,26 @@ def build_codex_command(
         "--output-last-message",
         str(output_path),
     ]
+    if lean:
+        command.append("--ignore-user-config")
     if auto_approve:
         command.append("--approve-for-me")
     else:
         command.extend(["--sandbox", "workspace-write"])
     if model is not None:
         command.extend(["--model", model])
+    command.extend(
+        [
+            "--config",
+            f'model_reasoning_effort="{reasoning_effort}"',
+            "--config",
+            f'model_verbosity="{model_verbosity}"',
+            "--config",
+            f"tool_output_token_limit={tool_output_token_limit}",
+        ]
+    )
+    if lean:
+        command.extend(["--config", 'model_reasoning_summary="none"'])
     # Read the prompt from standard input. Passing multi-line text as an
     # argument to the Windows npm ``codex.cmd`` shim truncates it at the first
     # line.

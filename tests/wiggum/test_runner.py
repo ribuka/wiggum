@@ -64,6 +64,10 @@ def _fake_git_output_factory(repo: Path, head: str = "before"):
         ({"api_retry_count": -1}, "--api-retry-count must be at least 0"),
         ({"api_retry_interval_sec": -1}, "--api-retry-interval-sec must be at least 0"),
         ({"codex_timeout_sec": 0}, "--codex-timeout-sec must be at least 1"),
+        (
+            {"tool_output_token_limit": 0},
+            "--tool-output-token-limit must be at least 1",
+        ),
     ],
 )
 def test_run_rejects_invalid_numeric_options(
@@ -84,6 +88,39 @@ def test_run_rejects_invalid_numeric_options(
 
     assert result == ExitCode.PREFLIGHT_ERROR
     assert any(message in entry for entry in messages)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        (
+            {"reasoning_effort": "extreme"},
+            "--reasoning-effort has an unsupported value: extreme",
+        ),
+        (
+            {"model_verbosity": "verbose"},
+            "--model-verbosity has an unsupported value: verbose",
+        ),
+    ],
+)
+def test_run_rejects_invalid_model_controls(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    kwargs: dict[str, str],
+    message: str,
+) -> None:
+    """Reject unsupported model controls before touching Git or Codex."""
+    messages: list[str] = []
+    monkeypatch.setattr(
+        runner_module.logger,
+        "error",
+        lambda entry, *args: messages.append(entry.format(*args)),
+    )
+
+    result = run(repo=tmp_path, **kwargs)
+
+    assert result == ExitCode.PREFLIGHT_ERROR
+    assert message in messages
 
 
 def test_run_rejects_a_missing_prompt_file(tmp_path: Path) -> None:
@@ -316,6 +353,8 @@ def test_run_completes_the_last_task_and_writes_one_log(
     commit_created = False
     codex_calls = 0
     success_messages: list[str] = []
+    info_messages: list[str] = []
+    warning_messages: list[str] = []
 
     def fake_git_output(repo: Path, *args: str) -> str:
         if args == ("rev-parse", "--show-toplevel"):
@@ -346,7 +385,14 @@ def test_run_completes_the_last_task_and_writes_one_log(
         assert repo == tmp_path
         output_path = Path(command[command.index("--output-last-message") + 1])
         output_path.write_text("TASK_COMPLETED: TASK-009\n", encoding="utf-8")
-        log_path.write_text("codex output\n", encoding="utf-8")
+        log_path.write_text(
+            '{"type":"item.completed","item":{"type":"command_execution",'
+            '"truncated":true}}\n'
+            '{"type":"turn.completed","usage":{"input_tokens":100,'
+            '"cached_input_tokens":80,"output_tokens":20,'
+            '"reasoning_output_tokens":5}}\n',
+            encoding="utf-8",
+        )
         tasks_path.write_text(
             tasks_path.read_text(encoding="utf-8").replace(
                 "- Status: pending",
@@ -376,6 +422,16 @@ def test_run_completes_the_last_task_and_writes_one_log(
         "success",
         lambda message, *args: success_messages.append(message.format(*args)),
     )
+    monkeypatch.setattr(
+        runner_module.logger,
+        "info",
+        lambda message, *args: info_messages.append(message.format(*args)),
+    )
+    monkeypatch.setattr(
+        runner_module.logger,
+        "warning",
+        lambda message, *args: warning_messages.append(message.format(*args)),
+    )
 
     result = run(repo=tmp_path, prompt_path=prompt_path, max_loops=3)
 
@@ -383,6 +439,15 @@ def test_run_completes_the_last_task_and_writes_one_log(
     assert codex_calls == 1
     assert success_messages[0].startswith("Completed TASK-009 (logs")
     assert success_messages[1] == "All Ralph tasks are complete"
+    assert (
+        "Token usage TASK-009 attempt 1: input=100, cached=80, output=20, "
+        "reasoning=5, task-total=120, run-total=120"
+    ) in info_messages
+    assert "Tool output monitor TASK-009 attempt 1: outputs=1, truncated=1, limit=12000" in info_messages
+    assert (
+        "Tool output limit reached for TASK-009 attempt 1: 1/1 outputs were truncated "
+        "at a 12000-token limit"
+    ) in warning_messages
     log_names = [path.name for path in (tmp_path / "logs").iterdir()]
     assert len(log_names) == 1
     assert log_names[0].endswith("_009_completed.log")

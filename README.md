@@ -59,7 +59,15 @@ uv run wiggum run
 - `--prompt-file PATH` — 各ループで Codex に渡すプロンプト（既定値: wiggum 同梱の Ralph ループプロンプト）。
 - `--logs-dir PATH` / `--temp-dir PATH` / `--uv-cache-dir PATH` — ループログ、一時ファイル、uv キャッシュの出力先を上書きします。
 - `--no-managed-env` — Codex の子プロセスに `UV_CACHE_DIR`、`TMP`、`TEMP` を設定しません。
+- `--reasoning-effort LEVEL` — Codex の推論量（既定値: `medium`）。
+- `--model-verbosity LEVEL` — Codex の出力 verbosity（既定値: `low`）。
+- `--tool-output-token-limit N` — モデル履歴に保持するツール出力の上限（既定値: `12000` tokens）。
+- `--lean` — ユーザーの Codex 設定を読み込まず、reasoning summary を無効化します。認証情報は引き続き利用されます。
 - `--max-loops N`、`--codex PATH`、`--model NAME`、`--auto-approve`、`--api-retry-count N`、`--api-retry-interval-sec N`、`--codex-timeout-sec N`。
+
+各 Codex 試行では JSONL の `turn.completed` イベントから input、cached input、output、
+reasoning output の token 使用量を集計し、タスク累計と実行全体の累計をログに表示します。Codex
+がツール出力を切り詰めたイベントを報告した場合は、その件数と設定上限も警告します。
 
 すべてのオプションと終了コードは、`uv run wiggum run --help` で確認できます。
 
@@ -134,8 +142,19 @@ Useful options:
   where wiggum writes loop logs, temporary files, and the uv cache.
 - `--no-managed-env` — do not set `UV_CACHE_DIR`, `TMP`, and `TEMP` for the
   Codex child process.
+- `--reasoning-effort LEVEL` — Codex reasoning effort (default: `medium`).
+- `--model-verbosity LEVEL` — Codex output verbosity (default: `low`).
+- `--tool-output-token-limit N` — maximum tool-output tokens retained in model
+  history (default: `12000`).
+- `--lean` — ignore user Codex configuration and disable reasoning summaries;
+  saved authentication remains available.
 - `--max-loops N`, `--codex PATH`, `--model NAME`, `--auto-approve`,
   `--api-retry-count N`, `--api-retry-interval-sec N`, `--codex-timeout-sec N`.
+
+For every Codex attempt, wiggum reads the JSONL `turn.completed` event and logs
+input, cached input, output, and reasoning-output token usage together with task
+and run totals. If Codex reports truncated tool-output events, wiggum also logs
+their count and configured limit as a warning.
 
 Run `uv run wiggum run --help` for the full option list and exit codes.
 

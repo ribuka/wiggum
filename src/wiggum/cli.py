@@ -14,6 +14,11 @@ from wiggum.defaults import (
     DEFAULT_API_RETRY_INTERVAL_SEC,
     DEFAULT_CODEX_TIMEOUT_SEC,
     DEFAULT_MAX_LOOPS,
+    DEFAULT_MODEL_VERBOSITY,
+    DEFAULT_REASONING_EFFORT,
+    DEFAULT_TOOL_OUTPUT_TOKEN_LIMIT,
+    MODEL_VERBOSITIES,
+    REASONING_EFFORTS,
 )
 from wiggum.exit_codes import ExitCode
 from wiggum.runner import run
@@ -79,6 +84,29 @@ def _add_run_arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--codex", default="codex", help="Codex executable name or path")
     parser.add_argument("--model", help="optional Codex model override")
+    parser.add_argument(
+        "--reasoning-effort",
+        choices=REASONING_EFFORTS,
+        default=DEFAULT_REASONING_EFFORT,
+        help="Codex reasoning effort; defaults to medium",
+    )
+    parser.add_argument(
+        "--model-verbosity",
+        choices=MODEL_VERBOSITIES,
+        default=DEFAULT_MODEL_VERBOSITY,
+        help="Codex model verbosity; defaults to low",
+    )
+    parser.add_argument(
+        "--tool-output-token-limit",
+        type=int,
+        default=DEFAULT_TOOL_OUTPUT_TOKEN_LIMIT,
+        help="maximum tokens retained from each tool output; defaults to 6000",
+    )
+    parser.add_argument(
+        "--lean",
+        action="store_true",
+        help="ignore user Codex config and disable reasoning summaries",
+    )
     parser.add_argument(
         "--auto-approve",
         action="store_true",
@@ -168,6 +196,10 @@ def _run_command(args: argparse.Namespace) -> ExitCode:
         max_loops=args.max_loops,
         codex_executable=args.codex,
         model=args.model,
+        reasoning_effort=args.reasoning_effort,
+        model_verbosity=args.model_verbosity,
+        tool_output_token_limit=args.tool_output_token_limit,
+        lean=args.lean,
         auto_approve=args.auto_approve,
         dry_run=args.dry_run,
         api_retry_count=args.api_retry_count,

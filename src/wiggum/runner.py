@@ -18,11 +18,17 @@ from wiggum.codex_process import (
     resolve_codex_executable,
     run_codex,
 )
+from wiggum.codex_usage import TokenUsage, read_codex_usage
 from wiggum.defaults import (
     DEFAULT_API_RETRY_COUNT,
     DEFAULT_API_RETRY_INTERVAL_SEC,
     DEFAULT_CODEX_TIMEOUT_SEC,
     DEFAULT_MAX_LOOPS,
+    DEFAULT_MODEL_VERBOSITY,
+    DEFAULT_REASONING_EFFORT,
+    DEFAULT_TOOL_OUTPUT_TOKEN_LIMIT,
+    MODEL_VERBOSITIES,
+    REASONING_EFFORTS,
 )
 from wiggum.exit_codes import ExitCode
 from wiggum.git_ops import (
@@ -35,6 +41,7 @@ from wiggum.git_ops import (
 from wiggum.loop_log import create_running_log, finalize_log
 from wiggum.protocol import classify_output, validate_selected_task
 from wiggum.task_ledger import read_task_section, task_snapshot
+from wiggum.tool_output_monitor import read_tool_output_monitor
 
 
 def _default_prompt_text() -> str:
@@ -113,6 +120,10 @@ def _run(
     max_loops: int,
     codex_executable: str,
     model: str | None,
+    reasoning_effort: str,
+    model_verbosity: str,
+    tool_output_token_limit: int,
+    lean: bool,
     auto_approve: bool,
     dry_run: bool,
     api_retry_count: int | None,
@@ -139,6 +150,14 @@ def _run(
         Codex executable name or path.
     model : str | None
         Optional model override.
+    reasoning_effort : str
+        Codex reasoning effort for each loop.
+    model_verbosity : str
+        Codex model verbosity for each loop.
+    tool_output_token_limit : int
+        Maximum tokens retained from one tool output in model history.
+    lean : bool
+        Whether to ignore user Codex configuration and reasoning summaries.
     auto_approve : bool
         Automatically approve Codex requests in the workspace-write sandbox.
     dry_run : bool
@@ -180,6 +199,15 @@ def _run(
         return ExitCode.PREFLIGHT_ERROR
     if codex_timeout_sec < 1:
         logger.error("--codex-timeout-sec must be at least 1")
+        return ExitCode.PREFLIGHT_ERROR
+    if reasoning_effort not in REASONING_EFFORTS:
+        logger.error("--reasoning-effort has an unsupported value: {}", reasoning_effort)
+        return ExitCode.PREFLIGHT_ERROR
+    if model_verbosity not in MODEL_VERBOSITIES:
+        logger.error("--model-verbosity has an unsupported value: {}", model_verbosity)
+        return ExitCode.PREFLIGHT_ERROR
+    if tool_output_token_limit < 1:
+        logger.error("--tool-output-token-limit must be at least 1")
         return ExitCode.PREFLIGHT_ERROR
     if prompt_path is not None and not prompt_path.is_file():
         logger.error("Prompt file does not exist: {}", prompt_path)
@@ -229,6 +257,7 @@ def _run(
         logger.warning("Stopped because no incomplete Ralph task is eligible")
         return ExitCode.TASK_BLOCKED
 
+    run_usage = TokenUsage()
     for loop_number in range(1, max_loops + 1):
         if loop_number > 1:
             try:
@@ -271,6 +300,10 @@ def _run(
             output_path,
             model,
             auto_approve,
+            reasoning_effort=reasoning_effort,
+            model_verbosity=model_verbosity,
+            tool_output_token_limit=tool_output_token_limit,
+            lean=lean,
         )
         if selected_task_section is None:
             raise AssertionError("a selected task must have a task section")
@@ -290,7 +323,9 @@ def _run(
             return ExitCode.SUCCESS
 
         retry_count = 0 if api_retry_count is None else api_retry_count
+        task_usage = TokenUsage()
         for api_attempt in range(1, retry_count + 2):
+            attempt_succeeded = False
             try:
                 completed = run_codex(
                     command,
@@ -308,7 +343,7 @@ def _run(
                     message = output_path.read_text(encoding="utf-8")
                     status, task_id = classify_output(message)
                     validate_selected_task(status, task_id, selected_task_id)
-                    break
+                    attempt_succeeded = True
             except subprocess.TimeoutExpired:
                 failure = f"Codex timed out after {codex_timeout_sec} seconds"
                 exit_code = ExitCode.CODEX_FAILURE
@@ -317,6 +352,44 @@ def _run(
                 failure = str(error)
                 exit_code = ExitCode.PROTOCOL_ERROR
                 retryable = False
+
+            attempt_usage = read_codex_usage(temporary_log_path)
+            output_monitor = read_tool_output_monitor(temporary_log_path)
+            task_usage += attempt_usage
+            run_usage += attempt_usage
+            logger.info(
+                "Token usage {} attempt {}: input={}, cached={}, output={}, "
+                "reasoning={}, task-total={}, run-total={}",
+                selected_task_id,
+                api_attempt,
+                attempt_usage.input_tokens,
+                attempt_usage.cached_input_tokens,
+                attempt_usage.output_tokens,
+                attempt_usage.reasoning_output_tokens,
+                task_usage.total_tokens,
+                run_usage.total_tokens,
+            )
+            if output_monitor.outputs:
+                logger.info(
+                    "Tool output monitor {} attempt {}: outputs={}, truncated={}, limit={}",
+                    selected_task_id,
+                    api_attempt,
+                    output_monitor.outputs,
+                    output_monitor.truncated_outputs,
+                    tool_output_token_limit,
+                )
+            if output_monitor.truncated_outputs:
+                logger.warning(
+                    "Tool output limit reached for {} attempt {}: {}/{} outputs were truncated "
+                    "at a {}-token limit",
+                    selected_task_id,
+                    api_attempt,
+                    output_monitor.truncated_outputs,
+                    output_monitor.outputs,
+                    tool_output_token_limit,
+                )
+            if attempt_succeeded:
+                break
 
             if not retryable or api_attempt > retry_count:
                 log_path = finalize_log(
@@ -428,6 +501,10 @@ def run(
     max_loops: int = DEFAULT_MAX_LOOPS,
     codex_executable: str = "codex",
     model: str | None = None,
+    reasoning_effort: str = DEFAULT_REASONING_EFFORT,
+    model_verbosity: str = DEFAULT_MODEL_VERBOSITY,
+    tool_output_token_limit: int = DEFAULT_TOOL_OUTPUT_TOKEN_LIMIT,
+    lean: bool = False,
     auto_approve: bool = False,
     dry_run: bool = False,
     api_retry_count: int | None = DEFAULT_API_RETRY_COUNT,
@@ -454,6 +531,14 @@ def run(
         Codex executable name or path.
     model : str | None, default None
         Optional model override.
+    reasoning_effort : str, default "medium"
+        Codex reasoning effort for each loop.
+    model_verbosity : str, default "low"
+        Codex model verbosity for each loop.
+    tool_output_token_limit : int, default 12000
+        Maximum tokens retained from one tool output in model history.
+    lean : bool, default False
+        Whether to ignore user Codex configuration and reasoning summaries.
     auto_approve : bool, default False
         Automatically approve Codex requests in the workspace-write sandbox.
     dry_run : bool, default False
@@ -492,6 +577,10 @@ def run(
             max_loops=max_loops,
             codex_executable=codex_executable,
             model=model,
+            reasoning_effort=reasoning_effort,
+            model_verbosity=model_verbosity,
+            tool_output_token_limit=tool_output_token_limit,
+            lean=lean,
             auto_approve=auto_approve,
             dry_run=dry_run,
             api_retry_count=api_retry_count,
