@@ -24,6 +24,7 @@ def test_parse_args_run_defaults_to_the_current_directory() -> None:
     assert args.uv_cache_dir is None
     assert args.no_managed_env is False
     assert args.max_loops == 20
+    assert args.api_retry_count is None
 
 
 def test_parse_args_init_defaults_to_the_current_directory() -> None:

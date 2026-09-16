@@ -482,6 +482,54 @@ def test_run_does_not_retry_a_non_transient_codex_failure(
     assert codex_calls == 1
 
 
+def test_run_does_not_retry_a_transient_codex_failure_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Stop after one transient Codex failure when retries are disabled."""
+    prompt_path = tmp_path / "prompt.md"
+    prompt_path.write_text("one loop", encoding="utf-8")
+    _write_tasks(
+        tmp_path / "TASKS.md",
+        """## TASK-010: failed task
+
+- Status: pending
+- Priority: 1
+- Depends on: none
+""",
+    )
+    codex_calls = 0
+
+    def fake_run_codex(
+        command: list[str],
+        repo: Path,
+        log_path: Path,
+        environment: dict[str, str],
+        timeout_sec: int,
+    ) -> subprocess.CompletedProcess[str]:
+        """Write a transient transport error and return a failed process."""
+        nonlocal codex_calls
+        del repo, environment, timeout_sec
+        codex_calls += 1
+        log_path.write_text("stream disconnected", encoding="utf-8")
+        return subprocess.CompletedProcess(command, 1)
+
+    monkeypatch.setattr(runner_module, "resolve_codex_executable", lambda value: value)
+    monkeypatch.setattr(runner_module, "require_git_output", _fake_git_output_factory(tmp_path))
+    monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
+    monkeypatch.setattr(
+        runner_module,
+        "build_codex_environment",
+        lambda *args, **kwargs: {},
+    )
+    monkeypatch.setattr(runner_module, "run_codex", fake_run_codex)
+
+    result = run(repo=tmp_path, prompt_path=prompt_path, max_loops=1)
+
+    assert result == ExitCode.CODEX_FAILURE
+    assert codex_calls == 1
+
+
 def test_run_allows_incomplete_task_without_changes_or_commit(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

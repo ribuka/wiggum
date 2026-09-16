@@ -56,7 +56,7 @@ def _run(
     model: str | None,
     auto_approve: bool,
     dry_run: bool,
-    api_retry_count: int,
+    api_retry_count: int | None,
     api_retry_interval_sec: int,
     codex_timeout_sec: int,
     tasks_path: Path,
@@ -84,8 +84,9 @@ def _run(
         Automatically approve Codex requests in the workspace-write sandbox.
     dry_run : bool
         Validate inputs and print the command without invoking Codex.
-    api_retry_count : int
+    api_retry_count : int | None
         Number of additional attempts after a Codex API or protocol failure.
+        ``None`` disables retries.
     api_retry_interval_sec : int
         Seconds to wait between Codex API retry attempts.
     codex_timeout_sec : int
@@ -112,7 +113,7 @@ def _run(
     if max_loops < 1:
         logger.error("--max-loops must be at least 1")
         return ExitCode.PREFLIGHT_ERROR
-    if api_retry_count < 0:
+    if api_retry_count is not None and api_retry_count < 0:
         logger.error("--api-retry-count must be at least 0")
         return ExitCode.PREFLIGHT_ERROR
     if api_retry_interval_sec < 0:
@@ -206,7 +207,8 @@ def _run(
             temporary_log_path.unlink(missing_ok=True)
             return ExitCode.SUCCESS
 
-        for api_attempt in range(1, api_retry_count + 2):
+        retry_count = 0 if api_retry_count is None else api_retry_count
+        for api_attempt in range(1, retry_count + 2):
             try:
                 completed = run_codex(
                     command,
@@ -233,7 +235,7 @@ def _run(
                 exit_code = ExitCode.PROTOCOL_ERROR
                 retryable = False
 
-            if not retryable or api_attempt > api_retry_count:
+            if not retryable or api_attempt > retry_count:
                 log_path = finalize_log(
                     temporary_log_path,
                     logs_dir,
@@ -248,7 +250,7 @@ def _run(
             logger.warning(
                 "Codex retry attempt {}/{} failed ({}); retrying in {} seconds",
                 api_attempt,
-                api_retry_count + 1,
+                retry_count + 1,
                 failure,
                 api_retry_interval_sec,
             )
@@ -345,7 +347,7 @@ def run(
     model: str | None = None,
     auto_approve: bool = False,
     dry_run: bool = False,
-    api_retry_count: int = DEFAULT_API_RETRY_COUNT,
+    api_retry_count: int | None = DEFAULT_API_RETRY_COUNT,
     api_retry_interval_sec: int = DEFAULT_API_RETRY_INTERVAL_SEC,
     codex_timeout_sec: int = DEFAULT_CODEX_TIMEOUT_SEC,
     tasks_path: Path | None = None,
@@ -373,8 +375,9 @@ def run(
         Automatically approve Codex requests in the workspace-write sandbox.
     dry_run : bool, default False
         Validate inputs and print the command without invoking Codex.
-    api_retry_count : int, default 1
+    api_retry_count : int | None, default None
         Number of additional attempts after a Codex API or protocol failure.
+        ``None`` disables retries.
     api_retry_interval_sec : int, default 5
         Seconds to wait between Codex API retry attempts.
     codex_timeout_sec : int, default 1800
