@@ -77,6 +77,29 @@ def _prompt_for_selected_task(prompt: str, selected_task_id: str) -> str:
     )
 
 
+def _validate_required_files(repo: Path, tasks_path: Path) -> str | None:
+    """Return a preflight error for a missing required repository file.
+
+    Parameters
+    ----------
+    repo : Path
+        Git repository root containing the project configuration.
+    tasks_path : Path
+        Ralph task ledger selected for this run.
+
+    Returns
+    -------
+    str | None
+        Human-readable error message, or ``None`` when every required file is
+        present as a regular file.
+    """
+    required_paths = (tasks_path, repo / "RALPH_PROJECT.md")
+    for required_path in required_paths:
+        if not required_path.is_file():
+            return f"Required file does not exist: {required_path}"
+    return None
+
+
 def _run(
     repo: Path,
     prompt_path: Path | None,
@@ -153,6 +176,10 @@ def _run(
         return ExitCode.PREFLIGHT_ERROR
     if prompt_path is not None and not prompt_path.is_file():
         logger.error("Prompt file does not exist: {}", prompt_path)
+        return ExitCode.PREFLIGHT_ERROR
+    required_file_error = _validate_required_files(repo, tasks_path)
+    if required_file_error is not None:
+        logger.error("{}", required_file_error)
         return ExitCode.PREFLIGHT_ERROR
     resolved_codex_executable = resolve_codex_executable(codex_executable)
     if resolved_codex_executable is None:

@@ -12,6 +12,12 @@ from wiggum.exit_codes import ExitCode
 from wiggum.runner import run
 
 
+@pytest.fixture(autouse=True)
+def _write_project_configuration(tmp_path: Path) -> None:
+    """Provide the required project configuration for runner tests."""
+    (tmp_path / "RALPH_PROJECT.md").write_text("project instructions\n", encoding="utf-8")
+
+
 def _write_tasks(tasks_path: Path, body: str) -> None:
     """Write a Ralph task ledger.
 
@@ -83,6 +89,32 @@ def test_run_rejects_invalid_numeric_options(
 def test_run_rejects_a_missing_prompt_file(tmp_path: Path) -> None:
     """Reject a --prompt-file path that does not exist."""
     result = run(repo=tmp_path, prompt_path=tmp_path / "missing-prompt.md")
+
+    assert result == ExitCode.PREFLIGHT_ERROR
+
+
+@pytest.mark.parametrize("required_name", ["TASKS.md", "RALPH_PROJECT.md"])
+def test_run_rejects_a_missing_required_file_before_starting_dependencies(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    required_name: str,
+) -> None:
+    """Reject an absent project file before resolving Codex or Git."""
+    (tmp_path / required_name).unlink(missing_ok=True)
+    if required_name == "RALPH_PROJECT.md":
+        (tmp_path / "TASKS.md").write_text("contents\n", encoding="utf-8")
+    monkeypatch.setattr(
+        runner_module,
+        "resolve_codex_executable",
+        lambda value: pytest.fail("Codex must not be resolved"),
+    )
+    monkeypatch.setattr(
+        runner_module,
+        "require_git_output",
+        lambda *args: pytest.fail("Git must not be invoked"),
+    )
+
+    result = run(repo=tmp_path)
 
     assert result == ExitCode.PREFLIGHT_ERROR
 
