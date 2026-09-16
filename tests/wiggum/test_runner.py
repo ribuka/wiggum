@@ -163,6 +163,8 @@ def test_default_prompt_uses_bundled_rules_without_an_external_ralph_file() -> N
     assert "# Ralph Loop Rules" in prompt
     assert "replace any external `RALPH.md`" in prompt
     assert "Read `RALPH_PROJECT.md` first" in prompt
+    assert "run that documented command directly" in prompt
+    assert "request escalation for that command" in prompt
 
 
 def test_run_logs_runner_progress_loop_and_selected_task_once(

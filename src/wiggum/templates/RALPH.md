@@ -11,6 +11,11 @@ loop. Project instructions may add constraints but never weaken these rules.
 4. Never weaken requirements or tests, change unrelated behavior, add tasks, or
    leave debug/generated artifacts.
 
+When project instructions authorize a sandbox-external test command through a
+preconfigured command rule, run that documented command directly. Do not
+request escalation for that command. If Codex denies the direct execution,
+report the selected task as blocked.
+
 Mark a task completed only when requirements, relevant tests, required checks,
 and architecture constraints pass. Report incomplete when work remains without
 an external decision; report blocked when human input or an unavailable external
