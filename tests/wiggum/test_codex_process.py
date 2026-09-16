@@ -31,13 +31,13 @@ def test_build_codex_command_uses_sandbox_by_default(tmp_path: Path) -> None:
     """Request the workspace-write sandbox unless auto-approve is set."""
     output_path = tmp_path / "last-message.txt"
 
-    command = build_codex_command("codex", tmp_path, output_path, "do work", None)
+    command = build_codex_command("codex", tmp_path, output_path, None)
 
     assert command[0] == "codex"
     assert "--sandbox" in command
     assert command[command.index("--sandbox") + 1] == "workspace-write"
     assert "--approve-for-me" not in command
-    assert command[-1] == "do work"
+    assert command[-1] == "-"
     assert str(tmp_path) in command
     assert str(output_path) in command
 
@@ -50,7 +50,6 @@ def test_build_codex_command_uses_approve_for_me_when_auto_approve(tmp_path: Pat
         "codex",
         tmp_path,
         output_path,
-        "do work",
         "gpt-test",
         auto_approve=True,
     )
@@ -90,15 +89,21 @@ def test_build_codex_environment_is_a_no_op_when_disabled(tmp_path: Path) -> Non
     assert environment.get("UV_CACHE_DIR") is None
 
 
-def test_run_codex_writes_combined_output_to_the_log_file(tmp_path: Path) -> None:
-    """Write standard output and standard error to the loop log file."""
+def test_run_codex_writes_combined_output_and_stdin_prompt_to_the_log_file(tmp_path: Path) -> None:
+    """Write combined output while passing the complete prompt through standard input."""
     log_path = tmp_path / "loop.log"
-    command = [sys.executable, "-c", "print('hello from codex')"]
+    command = [sys.executable, "-c", "import sys; print(sys.stdin.read())"]
 
-    completed = run_codex(command, tmp_path, log_path, environment=os.environ.copy())
+    completed = run_codex(
+        command,
+        tmp_path,
+        log_path,
+        environment=os.environ.copy(),
+        prompt="first line\nsecond line",
+    )
 
     assert completed.returncode == 0
-    assert "hello from codex" in log_path.read_text(encoding="utf-8")
+    assert log_path.read_text(encoding="utf-8") == "first line\nsecond line\n"
 
 
 def test_is_retryable_codex_failure_matches_only_transport_errors(tmp_path: Path) -> None:
