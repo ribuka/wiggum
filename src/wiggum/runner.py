@@ -34,7 +34,7 @@ from wiggum.git_ops import (
 )
 from wiggum.loop_log import create_running_log, finalize_log
 from wiggum.protocol import classify_output, validate_selected_task
-from wiggum.task_ledger import task_snapshot
+from wiggum.task_ledger import read_task_section, task_snapshot
 
 
 def _default_prompt_text() -> str:
@@ -51,7 +51,11 @@ def _default_prompt_text() -> str:
     return f"{general_rules.rstrip()}\n\n{loop_prompt}"
 
 
-def _prompt_for_selected_task(prompt: str, selected_task_id: str) -> str:
+def _prompt_for_selected_task(
+    prompt: str,
+    selected_task_id: str,
+    selected_task_section: str,
+) -> str:
     """Append the runner-selected task contract to a Codex prompt.
 
     Parameters
@@ -60,6 +64,8 @@ def _prompt_for_selected_task(prompt: str, selected_task_id: str) -> str:
         Base prompt containing the general Ralph loop instructions.
     selected_task_id : str
         Task identifier selected from the ledger by the parent runner.
+    selected_task_section : str
+        Complete Markdown section of the selected task.
 
     Returns
     -------
@@ -69,11 +75,12 @@ def _prompt_for_selected_task(prompt: str, selected_task_id: str) -> str:
     return (
         f"{prompt.rstrip()}\n\n"
         "## Runner-selected task\n\n"
-        f"The parent runner selected `{selected_task_id}` for this loop. Work only on "
-        "that task; do not select or start another task. If the task ledger differs "
-        "from this selection or prevents work, preserve existing changes and report "
-        f"`TASK_BLOCKED: {selected_task_id}`. In every outcome, the final non-empty "
-        f"line must use `{selected_task_id}`.\n"
+        f"The parent runner selected `{selected_task_id}` for this loop. The complete "
+        "task contract is below. Work only on it; do not select or start another task. "
+        "Do not read `TASKS.md` to select a task or discover requirements; read it only "
+        "when updating this task's status. If the ledger conflicts with this contract, "
+        f"preserve existing changes and report `TASK_BLOCKED: {selected_task_id}`.\n\n"
+        f"{selected_task_section}\n"
     )
 
 
@@ -205,6 +212,11 @@ def _run(
 
     try:
         incomplete_tasks, total_tasks, selected_task_id = task_snapshot(tasks_path)
+        selected_task_section = (
+            None
+            if selected_task_id is None
+            else read_task_section(tasks_path, selected_task_id)
+        )
     except (OSError, UnicodeError, ValueError) as error:
         logger.error("{}", error)
         return ExitCode.PREFLIGHT_ERROR
@@ -221,6 +233,11 @@ def _run(
         if loop_number > 1:
             try:
                 incomplete_tasks, _, selected_task_id = task_snapshot(tasks_path)
+                selected_task_section = (
+                    None
+                    if selected_task_id is None
+                    else read_task_section(tasks_path, selected_task_id)
+                )
             except (OSError, UnicodeError, ValueError) as error:
                 logger.error("{}", error)
                 return ExitCode.PREFLIGHT_ERROR
@@ -255,7 +272,13 @@ def _run(
             model,
             auto_approve,
         )
-        codex_prompt = _prompt_for_selected_task(prompt, selected_task_id)
+        if selected_task_section is None:
+            raise AssertionError("a selected task must have a task section")
+        codex_prompt = _prompt_for_selected_task(
+            prompt,
+            selected_task_id,
+            selected_task_section,
+        )
         temporary_log_path = create_running_log(logs_dir, started_at, selected_task_id)
         if selected_task_id is not None:
             logger.info("Ralph task {} started", selected_task_id)

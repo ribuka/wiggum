@@ -6,7 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from wiggum.task_ledger import read_ralph_tasks, task_progress, task_snapshot
+from wiggum.task_ledger import (
+    read_ralph_tasks,
+    read_task_section,
+    task_progress,
+    task_snapshot,
+)
 
 
 def test_task_progress_counts_uncompleted_tasks(tmp_path: Path) -> None:
@@ -90,6 +95,41 @@ def test_task_snapshot_returns_none_when_no_task_is_eligible(tmp_path: Path) -> 
     )
 
     assert task_snapshot(task_file) == (2, 2, None)
+
+
+def test_read_task_section_returns_only_the_requested_task(tmp_path: Path) -> None:
+    """Return a task heading and body without adjacent task sections."""
+    task_file = tmp_path / "TASKS.md"
+    task_file.write_text(
+        """## TASK-001: first
+
+- Status: completed
+
+## TASK-002: selected
+
+- Status: pending
+- Requirements: preserve this text
+
+## TASK-003: later
+
+- Status: pending
+""",
+        encoding="utf-8",
+    )
+
+    assert read_task_section(task_file, "TASK-002") == (
+        "## TASK-002: selected\n\n- Status: pending\n"
+        "- Requirements: preserve this text"
+    )
+
+
+def test_read_task_section_rejects_an_unknown_task(tmp_path: Path) -> None:
+    """Reject a request for a task identifier that has no section."""
+    task_file = tmp_path / "TASKS.md"
+    task_file.write_text("## TASK-001: only task\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="task section not found: TASK-002"):
+        read_task_section(task_file, "TASK-002")
 
 
 def test_read_ralph_tasks_rejects_missing_status_field(tmp_path: Path) -> None:
