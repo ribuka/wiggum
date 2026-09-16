@@ -12,6 +12,12 @@ from wiggum.exit_codes import ExitCode
 from wiggum.runner import run
 
 
+@pytest.fixture(autouse=True)
+def _write_project_configuration(tmp_path: Path) -> None:
+    """Provide the required project configuration for runner tests."""
+    (tmp_path / "RALPH_PROJECT.md").write_text("project instructions\n", encoding="utf-8")
+
+
 def _write_tasks(tasks_path: Path, body: str) -> None:
     """Write a Ralph task ledger.
 
@@ -87,6 +93,32 @@ def test_run_rejects_a_missing_prompt_file(tmp_path: Path) -> None:
     assert result == ExitCode.PREFLIGHT_ERROR
 
 
+@pytest.mark.parametrize("required_name", ["TASKS.md", "RALPH_PROJECT.md"])
+def test_run_rejects_a_missing_required_file_before_starting_dependencies(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    required_name: str,
+) -> None:
+    """Reject an absent project file before resolving Codex or Git."""
+    (tmp_path / required_name).unlink(missing_ok=True)
+    if required_name == "RALPH_PROJECT.md":
+        (tmp_path / "TASKS.md").write_text("contents\n", encoding="utf-8")
+    monkeypatch.setattr(
+        runner_module,
+        "resolve_codex_executable",
+        lambda value: pytest.fail("Codex must not be resolved"),
+    )
+    monkeypatch.setattr(
+        runner_module,
+        "require_git_output",
+        lambda *args: pytest.fail("Git must not be invoked"),
+    )
+
+    result = run(repo=tmp_path)
+
+    assert result == ExitCode.PREFLIGHT_ERROR
+
+
 def test_run_rejects_an_unresolvable_codex_executable(tmp_path: Path) -> None:
     """Reject a Codex executable name that cannot be resolved."""
     result = run(repo=tmp_path, codex_executable="no-such-codex-executable-xyz")
@@ -117,7 +149,18 @@ def test_run_uses_the_bundled_default_prompt_when_prompt_path_is_none(
 
     assert result == ExitCode.SUCCESS
     printed_command = capsys.readouterr().out
+    assert "# Ralph Loop Rules" in printed_command
     assert "Run exactly one Ralph loop in this repository." in printed_command
+    assert "The parent runner selected `TASK-001`" in printed_command
+
+
+def test_default_prompt_uses_bundled_rules_without_an_external_ralph_file() -> None:
+    """Use package-owned general rules instead of a repository RALPH.md file."""
+    prompt = runner_module._default_prompt_text()
+
+    assert "# Ralph Loop Rules" in prompt
+    assert "They replace an external `RALPH.md`" in prompt
+    assert "Read `RALPH_PROJECT.md` with explicit UTF-8 encoding as your first" in prompt
 
 
 def test_run_logs_runner_progress_loop_and_selected_task_once(
