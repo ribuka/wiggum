@@ -1,0 +1,28 @@
+# Tasks
+
+This file is the Ralph loop task ledger implementing `SPEC.md`. Each loop
+processes exactly one `pending` task whose dependencies are all `completed`,
+and changes that task's `Status` to `completed` only when every requirement and
+acceptance check passes.
+
+<!-- TODO: replace this example task with this project's real tasks. -->
+
+## TASK-001: Example task title
+
+- Status: pending
+- Priority: 1
+- Depends on: none
+
+### Requirements
+
+- Describe the required behavior here.
+
+### Tests
+
+- Describe the required test coverage here.
+
+### Acceptance commands
+
+- `<TODO: targeted test command>`
+- `<TODO: full test suite command>`
+- `<TODO: lint command>`

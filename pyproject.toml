@@ -5,12 +5,15 @@ build-backend = "hatchling.build"
 [project]
 name = "wiggum"
 dynamic = ["version"]
-description = "Add your description here"
+description = "A reusable Ralph loop runner for the Codex CLI"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "loguru==0.7.3",
 ]
+
+[project.scripts]
+wiggum = "wiggum.cli:main"
 
 [dependency-groups]
 dev = [

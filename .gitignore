@@ -10,6 +10,10 @@ wheels/
 .venv
 .uv-cache/
 
+# cache
+.pytest_cache/
+.ruff_cache/
+
 # data
 /data/
 
@@ -23,3 +27,5 @@ wheels/
 /logs/
 /log/
 *.log
+
+.reference
