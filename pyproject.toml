@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "wiggum"
+dynamic = ["version"]
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "loguru==0.7.3",
+]
+
+[dependency-groups]
+dev = [
+    "pylint==4.0.8",
+    "pytest==9.1.1",
+    "ruff==0.16.7",
+]
+
+[tool.hatch.version]
+path = "VERSION"
+pattern = '^(?P<version>\S+)\s*$'
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wiggum"]
+
+[tool.uv]
+cache-dir = ".uv-cache"
+
+[tool.pytest.ini_options]
+norecursedirs = [".*", "tmp"]
