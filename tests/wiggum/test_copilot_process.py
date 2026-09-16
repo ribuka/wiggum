@@ -35,8 +35,16 @@ def test_build_copilot_command_reads_the_prompt_from_standard_input() -> None:
     assert "--no-ask-user" in command
     assert "--output-format" in command
     assert command[command.index("--output-format") + 1] == "text"
+    assert command[command.index("--reasoning-effort") + 1] == "medium"
     assert "--allow-all-tools" not in command
     assert "--model" not in command
+
+
+def test_build_copilot_command_forwards_reasoning_effort() -> None:
+    """Forward a non-default reasoning effort to the Copilot CLI."""
+    command = build_copilot_command("copilot", None, reasoning_effort="high")
+
+    assert command[command.index("--reasoning-effort") + 1] == "high"
 
 
 def test_build_copilot_command_adds_allow_all_tools_when_auto_approve() -> None:
@@ -85,6 +93,33 @@ def test_run_copilot_does_not_write_the_last_message_on_failure(tmp_path: Path) 
     assert completed.returncode == 1
     assert "boom" in log_path.read_text(encoding="utf-8")
     assert not output_path.exists()
+
+
+def test_run_copilot_excludes_stderr_from_the_last_message(tmp_path: Path) -> None:
+    """Keep diagnostic standard error output out of the last-message file."""
+    log_path = tmp_path / "loop.log"
+    output_path = tmp_path / "last-message.txt"
+    command = [
+        sys.executable,
+        "-c",
+        (
+            "import sys; sys.stderr.write('diagnostic noise\\n'); "
+            "print(sys.stdin.read(), end='')"
+        ),
+    ]
+
+    completed = run_copilot(
+        command,
+        tmp_path,
+        log_path,
+        environment=os.environ.copy(),
+        prompt="TASK_COMPLETED: TASK-001",
+        output_path=output_path,
+    )
+
+    assert completed.returncode == 0
+    assert output_path.read_text(encoding="utf-8") == "TASK_COMPLETED: TASK-001"
+    assert "diagnostic noise" in log_path.read_text(encoding="utf-8")
 
 
 def test_is_retryable_copilot_failure_matches_only_transport_errors(tmp_path: Path) -> None:

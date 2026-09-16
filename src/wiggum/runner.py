@@ -365,7 +365,12 @@ def _run(
                 lean=lean,
             )
         else:
-            command = build_copilot_command(resolved_executable, model, auto_approve)
+            command = build_copilot_command(
+                resolved_executable,
+                model,
+                auto_approve,
+                reasoning_effort=reasoning_effort,
+            )
         if selected_task_section is None:
             raise AssertionError("a selected task must have a task section")
         codex_prompt = _prompt_for_selected_task(
@@ -577,9 +582,7 @@ def run(
     repo: Path,
     prompt_path: Path | None = None,
     max_loops: int = DEFAULT_MAX_LOOPS,
-    provider: str = DEFAULT_PROVIDER,
     codex_executable: str = "codex",
-    executable: str | None = None,
     model: str | None = None,
     reasoning_effort: str = DEFAULT_REASONING_EFFORT,
     model_verbosity: str = DEFAULT_MODEL_VERBOSITY,
@@ -595,6 +598,8 @@ def run(
     temp_dir: Path | None = None,
     uv_cache_dir: Path | None = None,
     manage_process_env: bool = True,
+    provider: str = DEFAULT_PROVIDER,
+    executable: str | None = None,
 ) -> ExitCode:
     """Run Ralph with one pair of runner lifecycle log messages.
 
@@ -607,15 +612,9 @@ def run(
         Ralph loop prompt when omitted.
     max_loops : int, default 20
         Maximum number of agent processes to start.
-    provider : str, default "codex"
-        Selected AI model vendor; one of :data:`wiggum.providers.PROVIDERS`.
     codex_executable : str, default "codex"
         Codex executable name or path. Kept for backward compatibility; used
         only when ``provider`` is ``"codex"`` and ``executable`` is omitted.
-    executable : str | None, default None
-        Provider CLI executable name or path. Defaults to ``codex_executable``
-        for the ``codex`` provider, or ``"copilot"`` for the ``copilot``
-        provider.
     model : str | None, default None
         Optional model override.
     reasoning_effort : str, default "medium"
@@ -655,6 +654,12 @@ def run(
     manage_process_env : bool, default True
         Whether to inject ``UV_CACHE_DIR``, ``TMP``, and ``TEMP`` into the
         agent child process environment.
+    provider : str, default "codex"
+        Selected AI model vendor; one of :data:`wiggum.providers.PROVIDERS`.
+    executable : str | None, default None
+        Provider CLI executable name or path. Defaults to ``codex_executable``
+        for the ``codex`` provider, or ``"copilot"`` for the ``copilot``
+        provider.
 
     Returns
     -------

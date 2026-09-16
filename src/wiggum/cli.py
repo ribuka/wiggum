@@ -107,7 +107,10 @@ def _add_run_arguments(parser: argparse.ArgumentParser) -> None:
         "--reasoning-effort",
         choices=REASONING_EFFORTS,
         default=DEFAULT_REASONING_EFFORT,
-        help="Codex reasoning effort; defaults to medium (codex provider only)",
+        help=(
+            "reasoning effort; defaults to medium (copilot provider does not "
+            "support minimal)"
+        ),
     )
     parser.add_argument(
         "--model-verbosity",

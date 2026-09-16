@@ -723,7 +723,7 @@ def test_run_rejects_codex_only_options_for_copilot(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    """Reject a Codex-only reasoning-effort override for the copilot provider."""
+    """Reject a Codex-only model-verbosity override for the copilot provider."""
     messages: list[str] = []
     monkeypatch.setattr(
         runner_module.logger,
@@ -735,11 +735,11 @@ def test_run_rejects_codex_only_options_for_copilot(
         repo=tmp_path,
         provider="copilot",
         auto_approve=True,
-        reasoning_effort="high",
+        model_verbosity="high",
     )
 
     assert result == ExitCode.PREFLIGHT_ERROR
-    assert any("--provider copilot does not support: --reasoning-effort" in m for m in messages)
+    assert any("--provider copilot does not support: --model-verbosity" in m for m in messages)
 
 
 def test_run_dry_run_prints_a_copilot_command_and_prompt(
@@ -777,7 +777,10 @@ def test_run_dry_run_prints_a_copilot_command_and_prompt(
 
     assert result == ExitCode.SUCCESS
     printed = capsys.readouterr().out
-    assert "copilot -s --no-ask-user --output-format text --allow-all-tools" in printed
+    assert (
+        "copilot -s --no-ask-user --output-format text --reasoning-effort medium "
+        "--allow-all-tools" in printed
+    )
     assert "one loop" in printed
 
 

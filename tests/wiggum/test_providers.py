@@ -61,10 +61,24 @@ def test_validate_provider_options_requires_auto_approve_for_copilot() -> None:
     assert error == "--provider copilot requires --auto-approve"
 
 
+def test_validate_provider_options_allows_copilot_reasoning_effort_override() -> None:
+    """Forward supported reasoning-effort levels to the copilot provider."""
+    error = validate_provider_options(
+        "copilot",
+        reasoning_effort="high",
+        model_verbosity="low",
+        tool_output_token_limit=12_000,
+        lean=False,
+        auto_approve=True,
+    )
+
+    assert error is None
+
+
 @pytest.mark.parametrize(
     ("kwargs", "expected_option"),
     [
-        ({"reasoning_effort": "high"}, "--reasoning-effort"),
+        ({"reasoning_effort": "minimal"}, "--reasoning-effort minimal"),
         ({"model_verbosity": "high"}, "--model-verbosity"),
         ({"tool_output_token_limit": 1}, "--tool-output-token-limit"),
         ({"lean": True}, "--lean"),

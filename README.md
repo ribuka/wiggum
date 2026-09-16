@@ -63,7 +63,7 @@ uv run wiggum run
 - `--no-managed-env` — 子プロセスに `UV_CACHE_DIR`、`TMP`、`TEMP` を設定しません。
 - `--provider {codex,copilot}` — 使用する AI モデルベンダー（既定値: `codex`）。
 - `--executable PATH` — ベンダーの CLI 実行ファイル（既定値: `codex` または `copilot`）。`--codex PATH` は Codex 用の非推奨エイリアスとして引き続き利用できます。
-- `--reasoning-effort LEVEL` — Codex の推論量（既定値: `medium`。Codex 専用）。
+- `--reasoning-effort LEVEL` — 推論量（既定値: `medium`。Copilot は `minimal` 非対応）。
 - `--model-verbosity LEVEL` — Codex の出力 verbosity（既定値: `low`。Codex 専用）。
 - `--tool-output-token-limit N` — モデル履歴に保持するツール出力の上限（既定値: `12000` tokens。Codex 専用）。
 - `--lean` — ユーザーの Codex 設定を読み込まず、reasoning summary を無効化します。認証情報は引き続き利用されます（Codex 専用）。
@@ -71,9 +71,11 @@ uv run wiggum run
 
 `--provider copilot` を指定する場合、`--auto-approve` は必須です（GitHub Copilot CLI
 には Codex の `workspace-write` サンドボックスに相当する半自動モードがなく、
-`--allow-all-tools` を渡して全ツールを許可する必要があるため）。また
-`--reasoning-effort`、`--model-verbosity`、`--tool-output-token-limit`、`--lean` は
-Codex 固有のインライン設定であり、既定値以外を指定すると検証エラーになります。
+`--allow-all-tools` を渡して全ツールを許可する必要があるため）。`--reasoning-effort`
+は両プロバイダで利用できますが、GitHub Copilot CLI には `minimal` レベルがなく
+指定すると検証エラーになります。また `--model-verbosity`、`--tool-output-token-limit`、
+`--lean` は Codex 固有のインライン設定であり、Copilot 選択時に既定値以外を指定すると
+検証エラーになります。
 
 各 Codex 試行では JSONL の `turn.completed` イベントから input、cached input、output、
 reasoning output の token 使用量を集計し、タスク累計と実行全体の累計をログに表示します。Codex
@@ -190,8 +192,8 @@ Useful options:
 - `--provider {codex,copilot}` — AI model vendor to use (default: `codex`).
 - `--executable PATH` — vendor CLI executable (default: `codex` or `copilot`).
   `--codex PATH` remains available as a deprecated alias for Codex.
-- `--reasoning-effort LEVEL` — Codex reasoning effort (default: `medium`;
-  Codex only).
+- `--reasoning-effort LEVEL` — reasoning effort (default: `medium`; Copilot
+  does not support `minimal`).
 - `--model-verbosity LEVEL` — Codex output verbosity (default: `low`; Codex
   only).
 - `--tool-output-token-limit N` — maximum tool-output tokens retained in model
@@ -204,10 +206,11 @@ Useful options:
 `--auto-approve` is required when `--provider copilot` is selected, because
 GitHub Copilot CLI has no partially-unattended mode comparable to Codex's
 `workspace-write` sandbox and must be told to allow every tool with
-`--allow-all-tools`. `--reasoning-effort`, `--model-verbosity`,
-`--tool-output-token-limit`, and `--lean` are Codex-only inline configuration;
-passing a non-default value together with `--provider copilot` is a
-validation error.
+`--allow-all-tools`. `--reasoning-effort` is supported by both providers, but
+GitHub Copilot CLI has no `minimal` level and rejects it as a validation
+error. `--model-verbosity`, `--tool-output-token-limit`, and `--lean` are
+Codex-only inline configuration; passing a non-default value together with
+`--provider copilot` is a validation error.
 
 For every Codex attempt, wiggum reads the JSONL `turn.completed` event and logs
 input, cached input, output, and reasoning-output token usage together with task

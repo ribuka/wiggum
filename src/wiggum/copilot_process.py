@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from wiggum.defaults import DEFAULT_CODEX_TIMEOUT_SEC
+from wiggum.defaults import DEFAULT_CODEX_TIMEOUT_SEC, DEFAULT_REASONING_EFFORT
 from wiggum.executable_resolution import resolve_executable
 
 
@@ -29,6 +29,8 @@ def build_copilot_command(
     executable: str,
     model: str | None,
     auto_approve: bool = False,
+    *,
+    reasoning_effort: str = DEFAULT_REASONING_EFFORT,
 ) -> list[str]:
     """Build the non-interactive GitHub Copilot CLI command for one loop.
 
@@ -43,6 +45,11 @@ def build_copilot_command(
         Copilot CLI has no sandboxed, partially-unattended mode comparable to
         Codex's ``workspace-write`` sandbox, so a Ralph loop requires this to
         be enabled; callers must validate that before building the command.
+    reasoning_effort : str, default "medium"
+        Reasoning effort passed to Copilot's ``--reasoning-effort`` flag.
+        Callers must validate that this is one of
+        :data:`wiggum.providers.COPILOT_REASONING_EFFORTS` before building
+        the command; GitHub Copilot CLI has no ``"minimal"`` level.
 
     Returns
     -------
@@ -55,6 +62,8 @@ def build_copilot_command(
         "--no-ask-user",
         "--output-format",
         "text",
+        "--reasoning-effort",
+        reasoning_effort,
     ]
     if auto_approve:
         command.append("--allow-all-tools")
@@ -78,8 +87,11 @@ def run_copilot(
 
     Unlike Codex, Copilot CLI has no ``--output-last-message`` flag. With
     ``-s`` (silent) its standard output is exactly the agent's final
-    response, so that captured output is written to both the loop log and
-    ``output_path`` to match the Codex last-message file contract.
+    response, so standard output and standard error are captured separately:
+    ``output_path`` only ever receives standard output, so diagnostic text on
+    standard error can never land after the final ``TASK_COMPLETED`` /
+    ``TASK_INCOMPLETE`` / ``TASK_BLOCKED`` line and break protocol detection.
+    The loop log still records both streams for troubleshooting.
 
     Parameters
     ----------
@@ -107,15 +119,14 @@ def run_copilot(
         command,
         cwd=repo,
         check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
+        capture_output=True,
         text=True,
         encoding="utf-8",
         env=environment,
         input=prompt,
         timeout=timeout_sec,
     )
-    log_path.write_text(completed.stdout, encoding="utf-8")
+    log_path.write_text(completed.stdout + completed.stderr, encoding="utf-8")
     if completed.returncode == 0:
         output_path.write_text(completed.stdout, encoding="utf-8")
     return completed

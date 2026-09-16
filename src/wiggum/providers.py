@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from wiggum.defaults import (
     DEFAULT_MODEL_VERBOSITY,
-    DEFAULT_REASONING_EFFORT,
     DEFAULT_TOOL_OUTPUT_TOKEN_LIMIT,
 )
 
@@ -19,6 +18,9 @@ COPILOT = "copilot"
 PROVIDERS = (CODEX, COPILOT)
 DEFAULT_PROVIDER = CODEX
 DEFAULT_EXECUTABLES = {CODEX: "codex", COPILOT: "copilot"}
+# GitHub Copilot CLI supports --reasoning-effort but, unlike Codex, has no
+# "minimal" level.
+COPILOT_REASONING_EFFORTS = ("low", "medium", "high", "xhigh")
 
 
 def validate_provider_options(
@@ -37,7 +39,8 @@ def validate_provider_options(
     provider : str
         Selected AI model vendor; one of :data:`PROVIDERS`.
     reasoning_effort : str
-        Requested reasoning effort, a Codex-only inline configuration value.
+        Requested reasoning effort. Supported by both providers, but GitHub
+        Copilot CLI has no ``"minimal"`` level.
     model_verbosity : str
         Requested model verbosity, a Codex-only inline configuration value.
     tool_output_token_limit : int
@@ -63,8 +66,8 @@ def validate_provider_options(
         return None
 
     unsupported: list[str] = []
-    if reasoning_effort != DEFAULT_REASONING_EFFORT:
-        unsupported.append("--reasoning-effort")
+    if reasoning_effort not in COPILOT_REASONING_EFFORTS:
+        unsupported.append("--reasoning-effort minimal")
     if model_verbosity != DEFAULT_MODEL_VERBOSITY:
         unsupported.append("--model-verbosity")
     if tool_output_token_limit != DEFAULT_TOOL_OUTPUT_TOKEN_LIMIT:
