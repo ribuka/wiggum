@@ -23,3 +23,5 @@ wheels/
 /logs/
 /log/
 *.log
+
+.reference
