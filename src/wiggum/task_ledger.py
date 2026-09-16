@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 TASK_SECTION_PATTERN = re.compile(
-    r"^## (?P<task_id>TASK-\d{3}):.*?$"
+    r"^(?P<heading>## (?P<task_id>TASK-\d{3}):.*?)$"
     r"(?P<body>.*?)(?=^## TASK-\d{3}:|\Z)",
     re.MULTILINE | re.DOTALL,
 )
@@ -132,6 +132,33 @@ def read_ralph_tasks(tasks_path: Path) -> tuple[RalphTask, ...]:
         missing = ", ".join(sorted(missing_dependencies))
         raise ValueError(f"unknown task dependencies: {missing}")
     return tuple(tasks)
+
+
+def read_task_section(tasks_path: Path, task_id: str) -> str:
+    """Return the complete Markdown section for one task.
+
+    Parameters
+    ----------
+    tasks_path : Path
+        UTF-8 Ralph task ledger.
+    task_id : str
+        Identifier of the task whose section is required.
+
+    Returns
+    -------
+    str
+        Heading and body of the requested task, without trailing whitespace.
+
+    Raises
+    ------
+    ValueError
+        If no section has the requested task identifier.
+    """
+    text = tasks_path.read_text(encoding="utf-8")
+    for section in TASK_SECTION_PATTERN.finditer(text):
+        if section.group("task_id") == task_id:
+            return f"{section.group('heading')}{section.group('body')}".rstrip()
+    raise ValueError(f"task section not found: {task_id}")
 
 
 def task_snapshot(tasks_path: Path) -> tuple[int, int, str | None]:

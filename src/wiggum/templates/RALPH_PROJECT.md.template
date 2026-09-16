@@ -16,12 +16,13 @@ At the start of each loop, read the following files one at a time in this order:
 1. `RALPH_PROJECT.md`
 2. `AGENTS.md` <!-- TODO: add or remove repository instruction files -->
 3. `SPEC.md` <!-- TODO: replace with this project's specification, or remove -->
-4. `TASKS.md`
-5. `PROGRESS.md` if it exists
-6. Existing code and tests related to the selected task
+4. `PROGRESS.md` if it exists
+5. Existing code and tests related to the selected task
 
-Do not search the repository for Ralph instructions before reading the files
-listed above. After selecting a task, begin with implementation and test files
+The runner supplies the complete selected task contract in the prompt. Do not
+read `TASKS.md` for task selection or requirements; read it only to update the
+selected task's status. Do not search the repository for Ralph instructions
+before reading the files listed above. Begin with implementation and test files
 directly required by that task. Expand to imported or dependent files only when
 needed to understand an active contract or failure. Do not preload files for
 later tasks, and do not read a guessed path that was absent from file-search
