@@ -252,15 +252,16 @@ def _run(
             resolved_codex_executable,
             repo,
             output_path,
-            _prompt_for_selected_task(prompt, selected_task_id),
             model,
             auto_approve,
         )
+        codex_prompt = _prompt_for_selected_task(prompt, selected_task_id)
         temporary_log_path = create_running_log(logs_dir, started_at, selected_task_id)
         if selected_task_id is not None:
             logger.info("Ralph task {} started", selected_task_id)
         if dry_run:
             print(subprocess.list2cmdline(command))
+            print(codex_prompt)
             output_path.unlink(missing_ok=True)
             temporary_log_path.unlink(missing_ok=True)
             return ExitCode.SUCCESS
@@ -273,6 +274,7 @@ def _run(
                     repo,
                     temporary_log_path,
                     codex_environment,
+                    codex_prompt,
                     codex_timeout_sec,
                 )
                 if completed.returncode != 0:

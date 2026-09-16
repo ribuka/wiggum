@@ -39,7 +39,6 @@ def build_codex_command(
     executable: str,
     repo: Path,
     output_path: Path,
-    prompt: str,
     model: str | None,
     auto_approve: bool = False,
 ) -> list[str]:
@@ -53,8 +52,6 @@ def build_codex_command(
         Repository working directory.
     output_path : Path
         File receiving the final Codex message.
-    prompt : str
-        Prompt for one Ralph loop.
     model : str | None
         Optional model override.
     auto_approve : bool, default False
@@ -82,7 +79,10 @@ def build_codex_command(
         command.extend(["--sandbox", "workspace-write"])
     if model is not None:
         command.extend(["--model", model])
-    command.append(prompt)
+    # Read the prompt from standard input. Passing multi-line text as an
+    # argument to the Windows npm ``codex.cmd`` shim truncates it at the first
+    # line.
+    command.append("-")
     return command
 
 
@@ -133,6 +133,7 @@ def run_codex(
     repo: Path,
     log_path: Path,
     environment: dict[str, str],
+    prompt: str,
     timeout_sec: int = DEFAULT_CODEX_TIMEOUT_SEC,
 ) -> subprocess.CompletedProcess[str]:
     """Run Codex and write its combined output to a loop log.
@@ -147,6 +148,8 @@ def run_codex(
         File receiving Codex standard output and standard error.
     environment : dict[str, str]
         Environment passed to the Codex child process.
+    prompt : str
+        Full Ralph loop prompt supplied to Codex through standard input.
     timeout_sec : int, default 1800
         Maximum time to wait for the Codex child process.
 
@@ -164,6 +167,7 @@ def run_codex(
             stderr=subprocess.STDOUT,
             text=True,
             env=environment,
+            input=prompt,
             timeout=timeout_sec,
         )
 

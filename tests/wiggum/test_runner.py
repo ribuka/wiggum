@@ -149,6 +149,7 @@ def test_run_uses_the_bundled_default_prompt_when_prompt_path_is_none(
 
     assert result == ExitCode.SUCCESS
     printed_command = capsys.readouterr().out
+    assert printed_command.splitlines()[0].endswith(" -")
     assert "# Ralph Loop Rules" in printed_command
     assert "Run exactly one Ralph loop in this repository." in printed_command
     assert "The parent runner selected `TASK-001`" in printed_command
@@ -332,10 +333,11 @@ def test_run_completes_the_last_task_and_writes_one_log(
         repo: Path,
         log_path: Path,
         environment: dict[str, str],
+        prompt: str,
         timeout_sec: int,
     ) -> subprocess.CompletedProcess[str]:
         nonlocal codex_calls
-        del environment
+        del environment, prompt
         assert timeout_sec == 1_800
         codex_calls += 1
         assert repo == tmp_path
@@ -405,9 +407,10 @@ def test_run_reports_codex_failure_when_the_process_exits_nonzero(
         repo: Path,
         log_path: Path,
         environment: dict[str, str],
+        prompt: str,
         timeout_sec: int,
     ) -> subprocess.CompletedProcess[str]:
-        del repo, environment, timeout_sec
+        del repo, environment, prompt, timeout_sec
         log_path.write_text("boom\n", encoding="utf-8")
         return subprocess.CompletedProcess(command, 1)
 
@@ -451,9 +454,10 @@ def test_run_reports_protocol_error_for_an_invalid_terminal_token(
         repo: Path,
         log_path: Path,
         environment: dict[str, str],
+        prompt: str,
         timeout_sec: int,
     ) -> subprocess.CompletedProcess[str]:
-        del repo, environment, timeout_sec
+        del repo, environment, prompt, timeout_sec
         output_path = Path(command[command.index("--output-last-message") + 1])
         output_path.write_text("no valid token\n", encoding="utf-8")
         log_path.write_text("codex output\n", encoding="utf-8")
@@ -500,11 +504,12 @@ def test_run_does_not_retry_a_non_transient_codex_failure(
         repo: Path,
         log_path: Path,
         environment: dict[str, str],
+        prompt: str,
         timeout_sec: int,
     ) -> subprocess.CompletedProcess[str]:
         """Write a local error and return a failed child process."""
         nonlocal codex_calls
-        del repo, environment, timeout_sec
+        del repo, environment, prompt, timeout_sec
         codex_calls += 1
         log_path.write_text("invalid local configuration\n", encoding="utf-8")
         return subprocess.CompletedProcess(command, 1)
@@ -548,11 +553,12 @@ def test_run_does_not_retry_a_transient_codex_failure_by_default(
         repo: Path,
         log_path: Path,
         environment: dict[str, str],
+        prompt: str,
         timeout_sec: int,
     ) -> subprocess.CompletedProcess[str]:
         """Write a transient transport error and return a failed process."""
         nonlocal codex_calls
-        del repo, environment, timeout_sec
+        del repo, environment, prompt, timeout_sec
         codex_calls += 1
         log_path.write_text("stream disconnected", encoding="utf-8")
         return subprocess.CompletedProcess(command, 1)
@@ -603,10 +609,11 @@ def test_run_allows_incomplete_task_without_changes_or_commit(
         repo: Path,
         log_path: Path,
         environment: dict[str, str],
+        prompt: str,
         timeout_sec: int,
     ) -> subprocess.CompletedProcess[str]:
         """Return a valid incomplete token without changing the worktree."""
-        del repo, environment, timeout_sec
+        del repo, environment, prompt, timeout_sec
         output_path = Path(command[command.index("--output-last-message") + 1])
         output_path.write_text("TASK_INCOMPLETE: TASK-010\n", encoding="utf-8")
         log_path.write_text("agent could not continue\n", encoding="utf-8")
