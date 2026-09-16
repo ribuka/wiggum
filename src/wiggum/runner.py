@@ -13,12 +13,6 @@ from pathlib import Path
 
 from loguru import logger
 
-from wiggum.copilot_process import (
-    build_copilot_command,
-    is_retryable_copilot_failure,
-    resolve_copilot_executable,
-    run_copilot,
-)
 from wiggum.codex_process import (
     build_codex_command,
     build_codex_environment,
@@ -27,6 +21,12 @@ from wiggum.codex_process import (
     run_codex,
 )
 from wiggum.codex_usage import TokenUsage, read_codex_usage
+from wiggum.copilot_process import (
+    build_copilot_command,
+    is_retryable_copilot_failure,
+    resolve_copilot_executable,
+    run_copilot,
+)
 from wiggum.defaults import (
     DEFAULT_API_RETRY_COUNT,
     DEFAULT_API_RETRY_INTERVAL_SEC,
@@ -47,8 +47,8 @@ from wiggum.git_ops import (
     require_git_output,
 )
 from wiggum.loop_log import create_running_log, finalize_log
-from wiggum.providers import default_executable_for_provider, validate_provider_options
 from wiggum.protocol import classify_output, validate_selected_task
+from wiggum.providers import default_executable_for_provider, validate_provider_options
 from wiggum.task_ledger import read_task_section, task_snapshot
 from wiggum.tool_output_monitor import ToolOutputMonitor, read_tool_output_monitor
 
