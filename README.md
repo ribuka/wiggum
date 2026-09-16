@@ -2,10 +2,10 @@
 
 ## 日本語
 
-wiggum は Codex CLI 向けに再利用できる Ralph ループランナーです。プロジェクトの
-`TASKS.md` 台帳から未完了のタスクを 1 件選び、Ralph ループ 1 回分だけ `codex exec` を
-実行し、ループの終了ステータスを検証して変更をコミットします。台帳が完了するか、停止
-条件に達するまでこれを繰り返します。
+wiggum は Codex CLI と GitHub Copilot CLI 向けに再利用できる Ralph ループランナーです。
+プロジェクトの `TASKS.md` 台帳から未完了のタスクを 1 件選び、選択した provider で
+Ralph ループ 1 回分だけ実行し、ループの終了ステータスを検証して変更をコミットします。
+台帳が完了するか、停止条件に達するまでこれを繰り返します。
 
 wiggum 自体はプロジェクトの仕様やタスクを定義しません。まず `wiggum init` で Ralph
 ループ用のファイルをリポジトリに生成し、その後プロジェクトに合わせて編集してください。
@@ -56,22 +56,25 @@ uv run wiggum run
 
 - `--repo PATH` — 操作対象のリポジトリ（既定値: カレントディレクトリ）。
 - `--tasks-file PATH` — タスク台帳（既定値: `<repo>/TASKS.md`）。
-- `--prompt-file PATH` — 各ループで Codex に渡すプロンプト（既定値: wiggum 同梱の Ralph ループプロンプト）。
+- `--provider {codex,copilot}` — AI モデル provider（既定値: `codex`）。
+- `--prompt-file PATH` — 各ループで provider に渡すプロンプト（既定値: wiggum 同梱の Ralph ループプロンプト）。
 - `--logs-dir PATH` / `--temp-dir PATH` / `--uv-cache-dir PATH` — ループログ、一時ファイル、uv キャッシュの出力先を上書きします。
-- `--no-managed-env` — Codex の子プロセスに `UV_CACHE_DIR`、`TMP`、`TEMP` を設定しません。
-- `--reasoning-effort LEVEL` — Codex の推論量（既定値: `medium`）。
-- `--model-verbosity LEVEL` — Codex の出力 verbosity（既定値: `low`）。
-- `--tool-output-token-limit N` — モデル履歴に保持するツール出力の上限（既定値: `12000` tokens）。
-- `--lean` — ユーザーの Codex 設定を読み込まず、reasoning summary を無効化します。認証情報は引き続き利用されます。
-- `--max-loops N`、`--codex PATH`、`--model NAME`、`--auto-approve`、`--api-retry-count N`、`--api-retry-interval-sec N`、`--codex-timeout-sec N`。
+- `--provider-executable PATH` — provider 実行ファイル名またはパス。Codex では従来の `--codex PATH` も引き続き使えます。
+- `--model NAME` — provider のモデル指定。
+- `--provider-timeout-sec N` — provider 子プロセスごとのタイムアウト。従来の `--codex-timeout-sec N` も引き続き使えます。
+- `--no-managed-env` — provider の子プロセスに `UV_CACHE_DIR`、`TMP`、`TEMP` を設定しません。
+- `--auto-approve` — provider が対応している場合に自動承認します。`copilot` では必須です。
+- `--reasoning-effort LEVEL` / `--model-verbosity LEVEL` / `--tool-output-token-limit N` / `--lean` — Codex 専用オプションです。`copilot` で指定すると検証エラーになります。
+- `--max-loops N`、`--api-retry-count N`、`--api-retry-interval-sec N`。
 
-各 Codex 試行では JSONL の `turn.completed` イベントから input、cached input、output、
+Codex では各試行の JSONL `turn.completed` イベントから input、cached input、output、
 reasoning output の token 使用量を集計し、タスク累計と実行全体の累計をログに表示します。Codex
-がツール出力を切り詰めたイベントを報告した場合は、その件数と設定上限も警告します。
+がツール出力を切り詰めたイベントを報告した場合は、その件数と設定上限も警告します。Copilot は
+現時点では token 使用量取得とツール出力切り詰め監視に未対応のため、その旨をログに表示します。
 
 すべてのオプションと終了コードは、`uv run wiggum run --help` で確認できます。
 
-### pytest だけを sandbox 外で実行する
+### pytest だけを sandbox 外で実行する（Codex）
 
 Windows の通常のユーザー Temp を必要とする pytest を実行する場合でも、
 `--auto-approve` は不要です。Codex の command rule で `uv run -m pytest` だけを
@@ -111,10 +114,11 @@ uv run -m ruff check .
 
 ## English
 
-wiggum is a reusable Ralph loop runner for the Codex CLI. It selects one
-pending task from a project's `TASKS.md` ledger, runs `codex exec` for exactly
-one Ralph loop, verifies the loop's terminal status, and commits the loop's
-changes, repeating until the ledger is complete or a stopping condition is hit.
+wiggum is a reusable Ralph loop runner for Codex CLI and GitHub Copilot CLI.
+It selects one pending task from a project's `TASKS.md` ledger, runs exactly
+one Ralph loop with the selected provider, verifies the loop's terminal status,
+and commits the loop's changes, repeating until the ledger is complete or a
+stopping condition is hit.
 
 wiggum itself does not define your project's specification or tasks; use
 `wiggum init` to scaffold the Ralph loop files into your repository, then edit
@@ -167,29 +171,35 @@ Useful options:
 
 - `--repo PATH` — repository to operate on (default: current directory).
 - `--tasks-file PATH` — task ledger (default: `<repo>/TASKS.md`).
-- `--prompt-file PATH` — prompt passed to Codex for each loop (default:
+- `--provider {codex,copilot}` — AI model provider (default: `codex`).
+- `--prompt-file PATH` — prompt passed to the provider for each loop (default:
   wiggum's bundled Ralph loop prompt).
 - `--logs-dir PATH` / `--temp-dir PATH` / `--uv-cache-dir PATH` — override
   where wiggum writes loop logs, temporary files, and the uv cache.
+- `--provider-executable PATH` — provider executable name or path. For Codex,
+  the legacy `--codex PATH` alias remains supported.
+- `--model NAME` — provider model override.
+- `--provider-timeout-sec N` — timeout for each provider child process. The
+  legacy `--codex-timeout-sec N` alias remains supported.
 - `--no-managed-env` — do not set `UV_CACHE_DIR`, `TMP`, and `TEMP` for the
-  Codex child process.
-- `--reasoning-effort LEVEL` — Codex reasoning effort (default: `medium`).
-- `--model-verbosity LEVEL` — Codex output verbosity (default: `low`).
-- `--tool-output-token-limit N` — maximum tool-output tokens retained in model
-  history (default: `12000`).
-- `--lean` — ignore user Codex configuration and disable reasoning summaries;
-  saved authentication remains available.
-- `--max-loops N`, `--codex PATH`, `--model NAME`, `--auto-approve`,
-  `--api-retry-count N`, `--api-retry-interval-sec N`, `--codex-timeout-sec N`.
+  provider child process.
+- `--auto-approve` — automatically pre-authorize provider actions when
+  supported. It is required for `copilot`.
+- `--reasoning-effort LEVEL`, `--model-verbosity LEVEL`,
+  `--tool-output-token-limit N`, and `--lean` — Codex-only options. wiggum
+  rejects them for `copilot`.
+- `--max-loops N`, `--api-retry-count N`, `--api-retry-interval-sec N`.
 
 For every Codex attempt, wiggum reads the JSONL `turn.completed` event and logs
 input, cached input, output, and reasoning-output token usage together with task
 and run totals. If Codex reports truncated tool-output events, wiggum also logs
-their count and configured limit as a warning.
+their count and configured limit as a warning. Copilot currently does not expose
+compatible token-usage or tool-output truncation data, so wiggum logs that those
+metrics are unavailable for the provider.
 
 Run `uv run wiggum run --help` for the full option list and exit codes.
 
-### Run only pytest outside the sandbox
+### Run only pytest outside the sandbox (Codex)
 
 When pytest requires the normal Windows user Temp directory, you do not need
 `--auto-approve`. Use a Codex command rule to allow only `uv run -m pytest`

@@ -63,7 +63,10 @@ def _fake_git_output_factory(repo: Path, head: str = "before"):
         ({"max_loops": 0}, "--max-loops must be at least 1"),
         ({"api_retry_count": -1}, "--api-retry-count must be at least 0"),
         ({"api_retry_interval_sec": -1}, "--api-retry-interval-sec must be at least 0"),
-        ({"codex_timeout_sec": 0}, "--codex-timeout-sec must be at least 1"),
+        (
+            {"codex_timeout_sec": 0},
+            "--provider-timeout-sec/--codex-timeout-sec must be at least 1",
+        ),
         (
             {"tool_output_token_limit": 0},
             "--tool-output-token-limit must be at least 1",
@@ -121,6 +124,69 @@ def test_run_rejects_invalid_model_controls(
 
     assert result == ExitCode.PREFLIGHT_ERROR
     assert message in messages
+
+
+def test_run_rejects_unsupported_provider_in_python_api(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Reject unknown providers before touching Git or any executable."""
+    messages: list[str] = []
+    monkeypatch.setattr(
+        runner_module.logger,
+        "error",
+        lambda entry, *args: messages.append(entry.format(*args)),
+    )
+
+    result = run(repo=tmp_path, provider="mystery")
+
+    assert result == ExitCode.PREFLIGHT_ERROR
+    assert messages == ["--provider has an unsupported value: mystery"]
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        (
+            {"provider": "copilot"},
+            "--auto-approve is required for provider copilot",
+        ),
+        (
+            {"provider": "copilot", "auto_approve": True, "reasoning_effort": "high"},
+            "--reasoning-effort is unsupported for provider copilot",
+        ),
+        (
+            {"provider": "copilot", "auto_approve": True, "model_verbosity": "medium"},
+            "--model-verbosity is unsupported for provider copilot",
+        ),
+        (
+            {"provider": "copilot", "auto_approve": True, "tool_output_token_limit": 1},
+            "--tool-output-token-limit is unsupported for provider copilot",
+        ),
+        (
+            {"provider": "copilot", "auto_approve": True, "lean": True},
+            "--lean is unsupported for provider copilot",
+        ),
+    ],
+)
+def test_run_rejects_unsupported_copilot_options(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    kwargs: dict[str, object],
+    message: str,
+) -> None:
+    """Reject unsupported Copilot options before touching Git or executables."""
+    messages: list[str] = []
+    monkeypatch.setattr(
+        runner_module.logger,
+        "error",
+        lambda entry, *args: messages.append(entry.format(*args)),
+    )
+
+    result = run(repo=tmp_path, **kwargs)
+
+    assert result == ExitCode.PREFLIGHT_ERROR
+    assert messages == [message]
 
 
 def test_run_rejects_a_missing_prompt_file(tmp_path: Path) -> None:
@@ -191,6 +257,47 @@ def test_run_uses_the_bundled_default_prompt_when_prompt_path_is_none(
     assert "Run one Ralph loop." in printed_command
     assert "The parent runner selected `TASK-001`" in printed_command
     assert "## TASK-001: only task" in printed_command
+
+
+def test_run_dry_run_builds_a_copilot_command(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Print a Copilot dry-run command and the selected-task prompt."""
+    prompt_path = tmp_path / "prompt.md"
+    prompt_path.write_text("one loop", encoding="utf-8")
+    _write_tasks(
+        tmp_path / "TASKS.md",
+        """## TASK-001: only task
+
+- Status: pending
+- Priority: 1
+- Depends on: none
+""",
+    )
+    monkeypatch.setattr(
+        runner_module,
+        "resolve_copilot_executable",
+        lambda value: value,
+    )
+    monkeypatch.setattr(runner_module, "require_git_output", _fake_git_output_factory(tmp_path))
+    monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
+
+    result = run(
+        repo=tmp_path,
+        prompt_path=prompt_path,
+        provider="copilot",
+        auto_approve=True,
+        dry_run=True,
+    )
+
+    assert result == ExitCode.SUCCESS
+    printed_command = capsys.readouterr().out
+    assert "copilot" in printed_command.splitlines()[0]
+    assert "--no-ask-user" in printed_command.splitlines()[0]
+    assert "--allow-all" in printed_command.splitlines()[0]
+    assert "The parent runner selected `TASK-001`" in printed_command
 
 
 def test_default_prompt_uses_bundled_rules_without_an_external_ralph_file() -> None:
@@ -710,3 +817,218 @@ def test_run_allows_incomplete_task_without_changes_or_commit(
     log_names = [path.name for path in (tmp_path / "logs").iterdir()]
     assert len(log_names) == 1
     assert log_names[0].endswith("_010_incompleted.log")
+
+
+@pytest.mark.parametrize(
+    ("status_line", "exit_code", "log_suffix"),
+    [
+        ("TASK_INCOMPLETE: TASK-012\n", ExitCode.TASK_INCOMPLETE, "_012_incompleted.log"),
+        ("TASK_BLOCKED: TASK-012\n", ExitCode.TASK_BLOCKED, "_012_blocked.log"),
+    ],
+)
+def test_run_supports_copilot_terminal_protocols_without_commits(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    status_line: str,
+    exit_code: ExitCode,
+    log_suffix: str,
+) -> None:
+    """Accept Copilot terminal statuses that do not require committing changes."""
+    prompt_path = tmp_path / "prompt.md"
+    prompt_path.write_text("one loop", encoding="utf-8")
+    _write_tasks(
+        tmp_path / "TASKS.md",
+        """## TASK-012: terminal task
+
+- Status: pending
+- Priority: 1
+- Depends on: none
+""",
+    )
+    info_messages: list[str] = []
+
+    def fake_run_copilot(
+        command: list[str],
+        repo: Path,
+        log_path: Path,
+        output_path: Path,
+        environment: dict[str, str],
+        prompt: str,
+        timeout_sec: int,
+    ) -> subprocess.CompletedProcess[str]:
+        del command, repo, environment, prompt, timeout_sec
+        output_path.write_text(status_line, encoding="utf-8")
+        log_path.write_text("copilot output\n", encoding="utf-8")
+        return subprocess.CompletedProcess(["copilot"], 0)
+
+    monkeypatch.setattr(
+        runner_module,
+        "resolve_copilot_executable",
+        lambda value: value,
+    )
+    monkeypatch.setattr(runner_module, "require_git_output", _fake_git_output_factory(tmp_path))
+    monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
+    monkeypatch.setattr(runner_module, "has_worktree_changes", lambda repo: False)
+    monkeypatch.setattr(runner_module, "run_copilot", fake_run_copilot)
+    monkeypatch.setattr(
+        runner_module,
+        "commit_loop_changes",
+        lambda *args: pytest.fail("Copilot terminal status without changes must not commit"),
+    )
+    monkeypatch.setattr(runner_module, "commit_count", lambda repo, before, after: 0)
+    monkeypatch.setattr(
+        runner_module.logger,
+        "info",
+        lambda message, *args: info_messages.append(message.format(*args)),
+    )
+
+    result = run(
+        repo=tmp_path,
+        prompt_path=prompt_path,
+        provider="copilot",
+        auto_approve=True,
+        max_loops=1,
+    )
+
+    assert result == exit_code
+    assert "Token usage is unavailable for provider copilot on TASK-012 attempt 1" in info_messages
+    log_names = [path.name for path in (tmp_path / "logs").iterdir()]
+    assert len(log_names) == 1
+    assert log_names[0].endswith(log_suffix)
+
+
+def test_run_completes_a_task_with_copilot(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Complete the final task with Copilot and stop successfully."""
+    prompt_path = tmp_path / "prompt.md"
+    prompt_path.write_text("one loop", encoding="utf-8")
+    tasks_path = tmp_path / "TASKS.md"
+    _write_tasks(
+        tasks_path,
+        """## TASK-013: final task
+
+- Status: pending
+- Priority: 1
+- Depends on: none
+""",
+    )
+    commit_created = False
+
+    def fake_git_output(repo: Path, *args: str) -> str:
+        if args == ("rev-parse", "--show-toplevel"):
+            return str(repo)
+        if args == ("rev-parse", "HEAD"):
+            return "after" if commit_created else "before"
+        raise AssertionError(args)
+
+    def fake_commit_loop_changes(repo: Path, task_id: str, status: str) -> None:
+        nonlocal commit_created
+        assert repo == tmp_path
+        assert task_id == "TASK-013"
+        assert status == "completed"
+        commit_created = True
+
+    def fake_run_copilot(
+        command: list[str],
+        repo: Path,
+        log_path: Path,
+        output_path: Path,
+        environment: dict[str, str],
+        prompt: str,
+        timeout_sec: int,
+    ) -> subprocess.CompletedProcess[str]:
+        del command, repo, environment, prompt, timeout_sec
+        output_path.write_text("TASK_COMPLETED: TASK-013\n", encoding="utf-8")
+        log_path.write_text("copilot output\n", encoding="utf-8")
+        tasks_path.write_text(
+            tasks_path.read_text(encoding="utf-8").replace(
+                "- Status: pending",
+                "- Status: completed",
+            ),
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(["copilot"], 0)
+
+    monkeypatch.setattr(
+        runner_module,
+        "resolve_copilot_executable",
+        lambda value: value,
+    )
+    monkeypatch.setattr(runner_module, "require_git_output", fake_git_output)
+    monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
+    monkeypatch.setattr(runner_module, "run_copilot", fake_run_copilot)
+    monkeypatch.setattr(runner_module, "commit_loop_changes", fake_commit_loop_changes)
+    monkeypatch.setattr(
+        runner_module,
+        "commit_count",
+        lambda repo, before, after: int(before != after),
+    )
+
+    result = run(
+        repo=tmp_path,
+        prompt_path=prompt_path,
+        provider="copilot",
+        auto_approve=True,
+        max_loops=1,
+    )
+
+    assert result == ExitCode.SUCCESS
+    log_names = [path.name for path in (tmp_path / "logs").iterdir()]
+    assert len(log_names) == 1
+    assert log_names[0].endswith("_013_completed.log")
+
+
+def test_run_reports_copilot_failure_when_the_process_exits_nonzero(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Stop with a provider failure exit code when the Copilot child fails."""
+    prompt_path = tmp_path / "prompt.md"
+    prompt_path.write_text("one loop", encoding="utf-8")
+    _write_tasks(
+        tmp_path / "TASKS.md",
+        """## TASK-014: failed task
+
+- Status: pending
+- Priority: 1
+- Depends on: none
+""",
+    )
+
+    def fake_run_copilot(
+        command: list[str],
+        repo: Path,
+        log_path: Path,
+        output_path: Path,
+        environment: dict[str, str],
+        prompt: str,
+        timeout_sec: int,
+    ) -> subprocess.CompletedProcess[str]:
+        del command, repo, output_path, environment, prompt, timeout_sec
+        log_path.write_text("copilot failed\n", encoding="utf-8")
+        return subprocess.CompletedProcess(["copilot"], 1)
+
+    monkeypatch.setattr(
+        runner_module,
+        "resolve_copilot_executable",
+        lambda value: value,
+    )
+    monkeypatch.setattr(runner_module, "require_git_output", _fake_git_output_factory(tmp_path))
+    monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
+    monkeypatch.setattr(runner_module, "run_copilot", fake_run_copilot)
+
+    result = run(
+        repo=tmp_path,
+        prompt_path=prompt_path,
+        provider="copilot",
+        auto_approve=True,
+        max_loops=1,
+        api_retry_count=0,
+    )
+
+    assert result == ExitCode.CODEX_FAILURE
+    log_names = [path.name for path in (tmp_path / "logs").iterdir()]
+    assert len(log_names) == 1
+    assert log_names[0].endswith("_014_copilot-failure.log")

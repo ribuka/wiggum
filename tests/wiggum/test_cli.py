@@ -23,6 +23,9 @@ def test_parse_args_run_defaults_to_the_current_directory() -> None:
     assert args.temp_dir is None
     assert args.uv_cache_dir is None
     assert args.no_managed_env is False
+    assert args.provider == "codex"
+    assert args.provider_executable is None
+    assert args.provider_timeout_sec == 1_800
     assert args.max_loops == 20
     assert args.api_retry_count is None
     assert args.reasoning_effort == "medium"
@@ -50,6 +53,36 @@ def test_parse_args_run_accepts_token_saving_controls() -> None:
     assert args.model_verbosity == "high"
     assert args.tool_output_token_limit == 1234
     assert args.lean is True
+
+
+def test_parse_args_run_accepts_provider_specific_options() -> None:
+    """Parse explicit provider selection and provider-agnostic aliases."""
+    args = _parse_args(
+        [
+            "run",
+            "--provider",
+            "copilot",
+            "--provider-executable",
+            "copilot-nightly",
+            "--provider-timeout-sec",
+            "45",
+            "--auto-approve",
+        ]
+    )
+
+    assert args.provider == "copilot"
+    assert args.provider_executable == "copilot-nightly"
+    assert args.provider_timeout_sec == 45
+    assert args.auto_approve is True
+
+
+def test_parse_args_run_keeps_the_legacy_codex_aliases() -> None:
+    """Keep ``--codex`` and ``--codex-timeout-sec`` as supported aliases."""
+    args = _parse_args(["run", "--codex", "custom-codex", "--codex-timeout-sec", "15"])
+
+    assert args.provider == "codex"
+    assert args.provider_executable == "custom-codex"
+    assert args.provider_timeout_sec == 15
 
 
 def test_parse_args_init_defaults_to_the_current_directory() -> None:

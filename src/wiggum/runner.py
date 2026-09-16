@@ -1,16 +1,24 @@
-"""Ralph loop orchestration: task selection, Codex execution, and Git commits."""
+"""Ralph loop orchestration: task selection, provider execution, and Git commits."""
 
 from __future__ import annotations
 
 import subprocess
 import tempfile
 import time
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from importlib import resources
 from pathlib import Path
 
 from loguru import logger
 
+from wiggum.copilot_process import (
+    build_copilot_command,
+    is_retryable_copilot_failure,
+    resolve_copilot_executable,
+    run_copilot,
+)
 from wiggum.codex_process import (
     build_codex_command,
     build_codex_environment,
@@ -39,9 +47,10 @@ from wiggum.git_ops import (
     require_git_output,
 )
 from wiggum.loop_log import create_running_log, finalize_log
+from wiggum.providers import default_executable_for_provider, validate_provider_options
 from wiggum.protocol import classify_output, validate_selected_task
 from wiggum.task_ledger import read_task_section, task_snapshot
-from wiggum.tool_output_monitor import read_tool_output_monitor
+from wiggum.tool_output_monitor import ToolOutputMonitor, read_tool_output_monitor
 
 
 def _default_prompt_text() -> str:
@@ -114,10 +123,142 @@ def _validate_required_files(repo: Path, tasks_path: Path) -> str | None:
     return None
 
 
+@dataclass(frozen=True)
+class _ProviderRuntime:
+    """Callables and capability flags for one configured provider."""
+
+    display_name: str
+    failure_log_suffix: str
+    usage_supported: bool
+    tool_output_monitor_supported: bool
+    resolve_executable: Callable[[str], str | None]
+    build_command: Callable[..., list[str]]
+    run_process: Callable[
+        [list[str], Path, Path, Path, dict[str, str], str, int],
+        subprocess.CompletedProcess[str],
+    ]
+    is_retryable_failure: Callable[[Path], bool]
+    read_usage: Callable[[Path], TokenUsage]
+    read_tool_output_monitor: Callable[[Path], ToolOutputMonitor]
+
+
+def _run_codex_process(
+    command: list[str],
+    repo: Path,
+    log_path: Path,
+    output_path: Path,
+    environment: dict[str, str],
+    prompt: str,
+    timeout_sec: int,
+) -> subprocess.CompletedProcess[str]:
+    """Run a Codex loop with the shared provider runtime signature.
+
+    Parameters
+    ----------
+    command : list[str]
+        Codex subprocess argument vector.
+    repo : Path
+        Repository working directory.
+    log_path : Path
+        File receiving the combined Codex process output.
+    output_path : Path
+        File receiving the final model message.
+    environment : dict[str, str]
+        Environment passed to the Codex child process.
+    prompt : str
+        Full Ralph loop prompt.
+    timeout_sec : int
+        Maximum time to wait for the Codex child process.
+
+    Returns
+    -------
+    subprocess.CompletedProcess[str]
+        Completed Codex process.
+    """
+    del output_path
+    return run_codex(command, repo, log_path, environment, prompt, timeout_sec)
+
+
+def _read_unsupported_usage(log_path: Path) -> TokenUsage:
+    """Return zero usage for providers without token metrics.
+
+    Parameters
+    ----------
+    log_path : Path
+        Provider log path.
+
+    Returns
+    -------
+    TokenUsage
+        All-zero usage record.
+    """
+    del log_path
+    return TokenUsage()
+
+
+def _read_unsupported_tool_output_monitor(log_path: Path) -> ToolOutputMonitor:
+    """Return an empty tool-output monitor for unsupported providers.
+
+    Parameters
+    ----------
+    log_path : Path
+        Provider log path.
+
+    Returns
+    -------
+    ToolOutputMonitor
+        All-zero tool-output summary.
+    """
+    del log_path
+    return ToolOutputMonitor()
+
+
+def _provider_runtime(provider: str) -> _ProviderRuntime:
+    """Return runtime hooks for the selected provider.
+
+    Parameters
+    ----------
+    provider : str
+        Selected provider identifier.
+
+    Returns
+    -------
+    _ProviderRuntime
+        Provider-specific execution hooks and capability flags.
+    """
+    if provider == "copilot":
+        return _ProviderRuntime(
+            display_name="GitHub Copilot",
+            failure_log_suffix="copilot-failure",
+            usage_supported=False,
+            tool_output_monitor_supported=False,
+            resolve_executable=resolve_copilot_executable,
+            build_command=build_copilot_command,
+            run_process=run_copilot,
+            is_retryable_failure=is_retryable_copilot_failure,
+            read_usage=_read_unsupported_usage,
+            read_tool_output_monitor=_read_unsupported_tool_output_monitor,
+        )
+    return _ProviderRuntime(
+        display_name="Codex",
+        failure_log_suffix="codex-failure",
+        usage_supported=True,
+        tool_output_monitor_supported=True,
+        resolve_executable=resolve_codex_executable,
+        build_command=build_codex_command,
+        run_process=_run_codex_process,
+        is_retryable_failure=is_retryable_codex_failure,
+        read_usage=read_codex_usage,
+        read_tool_output_monitor=read_tool_output_monitor,
+    )
+
+
 def _run(
     repo: Path,
     prompt_path: Path | None,
+    provider: str,
     max_loops: int,
+    provider_executable: str | None,
     codex_executable: str,
     model: str | None,
     reasoning_effort: str,
@@ -128,6 +269,7 @@ def _run(
     dry_run: bool,
     api_retry_count: int | None,
     api_retry_interval_sec: int,
+    provider_timeout_sec: int,
     codex_timeout_sec: int,
     tasks_path: Path,
     logs_dir: Path,
@@ -144,10 +286,14 @@ def _run(
     prompt_path : Path | None
         UTF-8 prompt file used for every loop, or ``None`` to use wiggum's
         bundled default prompt.
+    provider : str
+        AI model provider used for loop execution.
     max_loops : int
-        Maximum number of Codex processes to start.
+        Maximum number of provider processes to start.
+    provider_executable : str | None
+        Optional provider-agnostic executable override.
     codex_executable : str
-        Codex executable name or path.
+        Backward-compatible Codex executable override.
     model : str | None
         Optional model override.
     reasoning_effort : str
@@ -159,16 +305,18 @@ def _run(
     lean : bool
         Whether to ignore user Codex configuration and reasoning summaries.
     auto_approve : bool
-        Automatically approve Codex requests in the workspace-write sandbox.
+        Automatically approve provider actions when supported.
     dry_run : bool
-        Validate inputs and print the command without invoking Codex.
+        Validate inputs and print the command without invoking the provider.
     api_retry_count : int | None
-        Number of additional attempts after a Codex API or protocol failure.
+        Number of additional attempts after a provider API or protocol failure.
         ``None`` disables retries.
     api_retry_interval_sec : int
-        Seconds to wait between Codex API retry attempts.
+        Seconds to wait between provider API retry attempts.
+    provider_timeout_sec : int
+        Maximum time to wait for each provider child process.
     codex_timeout_sec : int
-        Maximum time to wait for each Codex child process.
+        Backward-compatible Codex timeout override.
     tasks_path : Path
         Ralph task ledger file.
     logs_dir : Path
@@ -188,6 +336,7 @@ def _run(
         Runner outcome.
     """
     repo = repo.resolve()
+    runtime = _provider_runtime(provider)
     if max_loops < 1:
         logger.error("--max-loops must be at least 1")
         return ExitCode.PREFLIGHT_ERROR
@@ -197,8 +346,8 @@ def _run(
     if api_retry_interval_sec < 0:
         logger.error("--api-retry-interval-sec must be at least 0")
         return ExitCode.PREFLIGHT_ERROR
-    if codex_timeout_sec < 1:
-        logger.error("--codex-timeout-sec must be at least 1")
+    if provider_timeout_sec < 1:
+        logger.error("--provider-timeout-sec/--codex-timeout-sec must be at least 1")
         return ExitCode.PREFLIGHT_ERROR
     if reasoning_effort not in REASONING_EFFORTS:
         logger.error("--reasoning-effort has an unsupported value: {}", reasoning_effort)
@@ -209,6 +358,17 @@ def _run(
     if tool_output_token_limit < 1:
         logger.error("--tool-output-token-limit must be at least 1")
         return ExitCode.PREFLIGHT_ERROR
+    provider_option_error = validate_provider_options(
+        provider=provider,
+        reasoning_effort=reasoning_effort,
+        model_verbosity=model_verbosity,
+        tool_output_token_limit=tool_output_token_limit,
+        lean=lean,
+        auto_approve=auto_approve,
+    )
+    if provider_option_error is not None:
+        logger.error("{}", provider_option_error)
+        return ExitCode.PREFLIGHT_ERROR
     if prompt_path is not None and not prompt_path.is_file():
         logger.error("Prompt file does not exist: {}", prompt_path)
         return ExitCode.PREFLIGHT_ERROR
@@ -216,9 +376,14 @@ def _run(
     if required_file_error is not None:
         logger.error("{}", required_file_error)
         return ExitCode.PREFLIGHT_ERROR
-    resolved_codex_executable = resolve_codex_executable(codex_executable)
-    if resolved_codex_executable is None:
-        logger.error("Codex executable not found: {}", codex_executable)
+    executable = default_executable_for_provider(
+        provider=provider,
+        codex_executable=codex_executable,
+        provider_executable=provider_executable,
+    )
+    resolved_executable = runtime.resolve_executable(executable)
+    if resolved_executable is None:
+        logger.error("{} executable not found: {}", runtime.display_name, executable)
         return ExitCode.PREFLIGHT_ERROR
 
     try:
@@ -294,8 +459,8 @@ def _run(
 
         if selected_task_id is None:
             raise AssertionError("an eligible task must be selected before starting Codex")
-        command = build_codex_command(
-            resolved_codex_executable,
+        command = runtime.build_command(
+            resolved_executable,
             repo,
             output_path,
             model,
@@ -327,25 +492,30 @@ def _run(
         for api_attempt in range(1, retry_count + 2):
             attempt_succeeded = False
             try:
-                completed = run_codex(
+                completed = runtime.run_process(
                     command,
                     repo,
                     temporary_log_path,
+                    output_path,
                     codex_environment,
                     codex_prompt,
-                    codex_timeout_sec,
+                    provider_timeout_sec,
                 )
                 if completed.returncode != 0:
-                    failure = f"Codex exited with code {completed.returncode}"
+                    failure = (
+                        f"{runtime.display_name} exited with code {completed.returncode}"
+                    )
                     exit_code = ExitCode.CODEX_FAILURE
-                    retryable = is_retryable_codex_failure(temporary_log_path)
+                    retryable = runtime.is_retryable_failure(temporary_log_path)
                 else:
                     message = output_path.read_text(encoding="utf-8")
                     status, task_id = classify_output(message)
                     validate_selected_task(status, task_id, selected_task_id)
                     attempt_succeeded = True
             except subprocess.TimeoutExpired:
-                failure = f"Codex timed out after {codex_timeout_sec} seconds"
+                failure = (
+                    f"{runtime.display_name} timed out after {provider_timeout_sec} seconds"
+                )
                 exit_code = ExitCode.CODEX_FAILURE
                 retryable = True
             except (OSError, UnicodeError, ValueError) as error:
@@ -353,23 +523,31 @@ def _run(
                 exit_code = ExitCode.PROTOCOL_ERROR
                 retryable = False
 
-            attempt_usage = read_codex_usage(temporary_log_path)
-            output_monitor = read_tool_output_monitor(temporary_log_path)
+            attempt_usage = runtime.read_usage(temporary_log_path)
+            output_monitor = runtime.read_tool_output_monitor(temporary_log_path)
             task_usage += attempt_usage
             run_usage += attempt_usage
-            logger.info(
-                "Token usage {} attempt {}: input={}, cached={}, output={}, "
-                "reasoning={}, task-total={}, run-total={}",
-                selected_task_id,
-                api_attempt,
-                attempt_usage.input_tokens,
-                attempt_usage.cached_input_tokens,
-                attempt_usage.output_tokens,
-                attempt_usage.reasoning_output_tokens,
-                task_usage.total_tokens,
-                run_usage.total_tokens,
-            )
-            if output_monitor.outputs:
+            if runtime.usage_supported:
+                logger.info(
+                    "Token usage {} attempt {}: input={}, cached={}, output={}, "
+                    "reasoning={}, task-total={}, run-total={}",
+                    selected_task_id,
+                    api_attempt,
+                    attempt_usage.input_tokens,
+                    attempt_usage.cached_input_tokens,
+                    attempt_usage.output_tokens,
+                    attempt_usage.reasoning_output_tokens,
+                    task_usage.total_tokens,
+                    run_usage.total_tokens,
+                )
+            else:
+                logger.info(
+                    "Token usage is unavailable for provider {} on {} attempt {}",
+                    provider,
+                    selected_task_id,
+                    api_attempt,
+                )
+            if runtime.tool_output_monitor_supported and output_monitor.outputs:
                 logger.info(
                     "Tool output monitor {} attempt {}: outputs={}, truncated={}, limit={}",
                     selected_task_id,
@@ -378,7 +556,7 @@ def _run(
                     output_monitor.truncated_outputs,
                     tool_output_token_limit,
                 )
-            if output_monitor.truncated_outputs:
+            if runtime.tool_output_monitor_supported and output_monitor.truncated_outputs:
                 logger.warning(
                     "Tool output limit reached for {} attempt {}: {}/{} outputs were truncated "
                     "at a {}-token limit",
@@ -397,14 +575,19 @@ def _run(
                     logs_dir,
                     started_at,
                     selected_task_id,
-                    "codex-failure" if exit_code == ExitCode.CODEX_FAILURE else "protocol-error",
+                    (
+                        runtime.failure_log_suffix
+                        if exit_code == ExitCode.CODEX_FAILURE
+                        else "protocol-error"
+                    ),
                 )
                 logger.error("{}; see {}", failure, log_path.relative_to(repo))
                 output_path.unlink(missing_ok=True)
                 return exit_code
 
             logger.warning(
-                "Codex retry attempt {}/{} failed ({}); retrying in {} seconds",
+                "{} retry attempt {}/{} failed ({}); retrying in {} seconds",
+                runtime.display_name,
                 api_attempt,
                 retry_count + 1,
                 failure,
@@ -413,7 +596,7 @@ def _run(
             output_path.unlink(missing_ok=True)
             time.sleep(api_retry_interval_sec)
         else:
-            raise AssertionError("Codex retry loop must return or succeed")
+            raise AssertionError("provider retry loop must return or succeed")
 
         output_path.unlink(missing_ok=True)
 
@@ -422,7 +605,7 @@ def _run(
             agent_commits = commit_count(repo, before, after_agent)
             if agent_commits != 0:
                 raise RuntimeError(
-                    f"Codex created {agent_commits} commits; the runner owns loop commits"
+                    f"{runtime.display_name} created {agent_commits} commits; the runner owns loop commits"
                 )
             has_changes = status == "completed" or has_worktree_changes(repo)
             if has_changes:
@@ -498,7 +681,9 @@ def _run(
 def run(
     repo: Path,
     prompt_path: Path | None = None,
+    provider: str = "codex",
     max_loops: int = DEFAULT_MAX_LOOPS,
+    provider_executable: str | None = None,
     codex_executable: str = "codex",
     model: str | None = None,
     reasoning_effort: str = DEFAULT_REASONING_EFFORT,
@@ -509,6 +694,7 @@ def run(
     dry_run: bool = False,
     api_retry_count: int | None = DEFAULT_API_RETRY_COUNT,
     api_retry_interval_sec: int = DEFAULT_API_RETRY_INTERVAL_SEC,
+    provider_timeout_sec: int | None = None,
     codex_timeout_sec: int = DEFAULT_CODEX_TIMEOUT_SEC,
     tasks_path: Path | None = None,
     logs_dir: Path | None = None,
@@ -525,10 +711,14 @@ def run(
     prompt_path : Path | None, default None
         UTF-8 prompt file used for every loop. Defaults to wiggum's bundled
         Ralph loop prompt when omitted.
+    provider : str, default "codex"
+        AI model provider used for loop execution.
     max_loops : int, default 20
-        Maximum number of Codex processes to start.
+        Maximum number of provider processes to start.
+    provider_executable : str | None, default None
+        Optional provider-agnostic executable override.
     codex_executable : str, default "codex"
-        Codex executable name or path.
+        Backward-compatible Codex executable override.
     model : str | None, default None
         Optional model override.
     reasoning_effort : str, default "medium"
@@ -540,16 +730,19 @@ def run(
     lean : bool, default False
         Whether to ignore user Codex configuration and reasoning summaries.
     auto_approve : bool, default False
-        Automatically approve Codex requests in the workspace-write sandbox.
+        Automatically approve provider actions when supported.
     dry_run : bool, default False
-        Validate inputs and print the command without invoking Codex.
+        Validate inputs and print the command without invoking the provider.
     api_retry_count : int | None, default None
-        Number of additional attempts after a Codex API or protocol failure.
+        Number of additional attempts after a provider API or protocol failure.
         ``None`` disables retries.
     api_retry_interval_sec : int, default 5
-        Seconds to wait between Codex API retry attempts.
+        Seconds to wait between provider API retry attempts.
+    provider_timeout_sec : int | None, default None
+        Generic timeout override for the selected provider.
     codex_timeout_sec : int, default 1800
-        Maximum time to wait for each Codex child process.
+        Backward-compatible timeout override. Applies when
+        ``provider_timeout_sec`` is not set.
     tasks_path : Path | None, default None
         Ralph task ledger file. Defaults to ``<repo>/TASKS.md``.
     logs_dir : Path | None, default None
@@ -574,7 +767,9 @@ def run(
         return _run(
             repo=repo,
             prompt_path=prompt_path,
+            provider=provider,
             max_loops=max_loops,
+            provider_executable=provider_executable,
             codex_executable=codex_executable,
             model=model,
             reasoning_effort=reasoning_effort,
@@ -585,6 +780,9 @@ def run(
             dry_run=dry_run,
             api_retry_count=api_retry_count,
             api_retry_interval_sec=api_retry_interval_sec,
+            provider_timeout_sec=(
+                codex_timeout_sec if provider_timeout_sec is None else provider_timeout_sec
+            ),
             codex_timeout_sec=codex_timeout_sec,
             tasks_path=tasks_path if tasks_path is not None else repo / "TASKS.md",
             logs_dir=logs_dir if logs_dir is not None else repo / "logs",

@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "wiggum"
 dynamic = ["version"]
-description = "A reusable Ralph loop runner for the Codex CLI"
+description = "A reusable Ralph loop runner for Codex CLI and GitHub Copilot CLI"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [

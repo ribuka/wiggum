@@ -21,6 +21,7 @@ from wiggum.defaults import (
     REASONING_EFFORTS,
 )
 from wiggum.exit_codes import ExitCode
+from wiggum.providers import SUPPORTED_PROVIDERS
 from wiggum.runner import run
 from wiggum.scaffold import scaffold
 
@@ -67,7 +68,13 @@ def _add_run_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--no-managed-env",
         action="store_true",
-        help="do not set UV_CACHE_DIR, TMP, and TEMP for the Codex child process",
+        help="do not set UV_CACHE_DIR, TMP, and TEMP for the provider child process",
+    )
+    parser.add_argument(
+        "--provider",
+        choices=SUPPORTED_PROVIDERS,
+        default="codex",
+        help="AI model provider to run; defaults to codex",
     )
     parser.add_argument("--max-loops", type=int, default=DEFAULT_MAX_LOOPS)
     parser.add_argument("--api-retry-count", type=int, default=DEFAULT_API_RETRY_COUNT)
@@ -77,45 +84,53 @@ def _add_run_arguments(parser: argparse.ArgumentParser) -> None:
         default=DEFAULT_API_RETRY_INTERVAL_SEC,
     )
     parser.add_argument(
+        "--provider-timeout-sec",
         "--codex-timeout-sec",
+        dest="provider_timeout_sec",
         type=int,
         default=DEFAULT_CODEX_TIMEOUT_SEC,
-        help="maximum seconds to wait for each Codex child process",
+        help="maximum seconds to wait for each provider child process",
     )
-    parser.add_argument("--codex", default="codex", help="Codex executable name or path")
-    parser.add_argument("--model", help="optional Codex model override")
+    parser.add_argument(
+        "--provider-executable",
+        "--codex",
+        dest="provider_executable",
+        default=None,
+        help="provider executable name or path; --codex remains supported for Codex",
+    )
+    parser.add_argument("--model", help="optional provider model override")
     parser.add_argument(
         "--reasoning-effort",
         choices=REASONING_EFFORTS,
         default=DEFAULT_REASONING_EFFORT,
-        help="Codex reasoning effort; defaults to medium",
+        help="Codex-only reasoning effort; defaults to medium",
     )
     parser.add_argument(
         "--model-verbosity",
         choices=MODEL_VERBOSITIES,
         default=DEFAULT_MODEL_VERBOSITY,
-        help="Codex model verbosity; defaults to low",
+        help="Codex-only model verbosity; defaults to low",
     )
     parser.add_argument(
         "--tool-output-token-limit",
         type=int,
         default=DEFAULT_TOOL_OUTPUT_TOKEN_LIMIT,
-        help="maximum tokens retained from each tool output; defaults to 6000",
+        help="Codex-only maximum tokens retained from each tool output",
     )
     parser.add_argument(
         "--lean",
         action="store_true",
-        help="ignore user Codex config and disable reasoning summaries",
+        help="Codex-only mode: ignore user config and disable reasoning summaries",
     )
     parser.add_argument(
         "--auto-approve",
         action="store_true",
-        help="automatically approve Codex requests in the workspace-write sandbox",
+        help="automatically approve provider actions when supported",
     )
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="validate inputs and print one Codex command without running it",
+        help="validate inputs and print one provider command without running it",
     )
 
 
@@ -151,11 +166,11 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="wiggum",
         description=(
-            "Run Ralph loop tasks with Codex CLI, or scaffold Ralph loop "
-            "files into a repository."
+            "Run Ralph loop tasks with Codex CLI or GitHub Copilot CLI, "
+            "or scaffold Ralph loop files into a repository."
         ),
         epilog=(
-            "run exit codes: 0=all complete/dry run, 10=Codex failure, "
+            "run exit codes: 0=all complete/dry run, 10=provider failure, "
             "11=protocol error, 12=Git state error, 20=task incomplete, "
             "21=task blocked, 22=max loops, 23=preflight error."
         ),
@@ -193,8 +208,10 @@ def _run_command(args: argparse.Namespace) -> ExitCode:
     return run(
         repo=args.repo,
         prompt_path=args.prompt_file,
+        provider=args.provider,
         max_loops=args.max_loops,
-        codex_executable=args.codex,
+        provider_executable=args.provider_executable,
+        codex_executable="codex",
         model=args.model,
         reasoning_effort=args.reasoning_effort,
         model_verbosity=args.model_verbosity,
@@ -204,7 +221,8 @@ def _run_command(args: argparse.Namespace) -> ExitCode:
         dry_run=args.dry_run,
         api_retry_count=args.api_retry_count,
         api_retry_interval_sec=args.api_retry_interval_sec,
-        codex_timeout_sec=args.codex_timeout_sec,
+        provider_timeout_sec=args.provider_timeout_sec,
+        codex_timeout_sec=args.provider_timeout_sec,
         tasks_path=args.tasks_file,
         logs_dir=args.logs_dir,
         temp_dir=args.temp_dir,

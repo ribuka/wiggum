@@ -1,4 +1,4 @@
-"""Wiggum: a reusable Ralph loop runner for the Codex CLI."""
+"""Wiggum: a reusable Ralph loop runner for AI coding CLIs."""
 
 from __future__ import annotations
 
