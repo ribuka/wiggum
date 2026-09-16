@@ -710,3 +710,221 @@ def test_run_allows_incomplete_task_without_changes_or_commit(
     log_names = [path.name for path in (tmp_path / "logs").iterdir()]
     assert len(log_names) == 1
     assert log_names[0].endswith("_010_incompleted.log")
+
+
+def test_run_rejects_copilot_without_auto_approve(tmp_path: Path) -> None:
+    """Reject a Copilot run before touching Git when auto-approve is missing."""
+    result = run(repo=tmp_path, provider="copilot")
+
+    assert result == ExitCode.PREFLIGHT_ERROR
+
+
+def test_run_rejects_codex_only_options_for_copilot(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Reject a Codex-only reasoning-effort override for the copilot provider."""
+    messages: list[str] = []
+    monkeypatch.setattr(
+        runner_module.logger,
+        "error",
+        lambda entry, *args: messages.append(entry.format(*args)),
+    )
+
+    result = run(
+        repo=tmp_path,
+        provider="copilot",
+        auto_approve=True,
+        reasoning_effort="high",
+    )
+
+    assert result == ExitCode.PREFLIGHT_ERROR
+    assert any("--provider copilot does not support: --reasoning-effort" in m for m in messages)
+
+
+def test_run_dry_run_prints_a_copilot_command_and_prompt(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Print the Copilot command and prompt without invoking any process."""
+    prompt_path = tmp_path / "prompt.md"
+    prompt_path.write_text("one loop", encoding="utf-8")
+    _write_tasks(
+        tmp_path / "TASKS.md",
+        """## TASK-013: dry run task
+
+- Status: pending
+- Priority: 1
+- Depends on: none
+""",
+    )
+    monkeypatch.setattr(runner_module, "resolve_copilot_executable", lambda value: value)
+    monkeypatch.setattr(
+        runner_module,
+        "require_git_output",
+        _fake_git_output_factory(tmp_path),
+    )
+    monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
+
+    result = run(
+        repo=tmp_path,
+        prompt_path=prompt_path,
+        provider="copilot",
+        auto_approve=True,
+        dry_run=True,
+    )
+
+    assert result == ExitCode.SUCCESS
+    printed = capsys.readouterr().out
+    assert "copilot -s --no-ask-user --output-format text --allow-all-tools" in printed
+    assert "one loop" in printed
+
+
+def test_run_completes_a_task_with_the_copilot_provider(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Complete a task through the copilot provider using its own process hooks."""
+    prompt_path = tmp_path / "prompt.md"
+    prompt_path.write_text("one loop", encoding="utf-8")
+    tasks_path = tmp_path / "TASKS.md"
+    _write_tasks(
+        tasks_path,
+        """## TASK-011: copilot task
+
+- Status: pending
+- Priority: 1
+- Depends on: none
+""",
+    )
+    commit_created = False
+    copilot_calls = 0
+
+    def fake_git_output(repo: Path, *args: str) -> str:
+        if args == ("rev-parse", "--show-toplevel"):
+            return str(repo)
+        if args == ("rev-parse", "HEAD"):
+            return "after" if commit_created else "before"
+        raise AssertionError(args)
+
+    def fake_commit_loop_changes(repo: Path, task_id: str, status: str) -> None:
+        nonlocal commit_created
+        assert repo == tmp_path
+        assert task_id == "TASK-011"
+        assert status == "completed"
+        commit_created = True
+
+    def fake_run_copilot(
+        command: list[str],
+        repo: Path,
+        log_path: Path,
+        environment: dict[str, str],
+        prompt: str,
+        output_path: Path,
+        timeout_sec: int,
+    ) -> subprocess.CompletedProcess[str]:
+        nonlocal copilot_calls
+        del environment, prompt, timeout_sec
+        copilot_calls += 1
+        assert repo == tmp_path
+        assert "--allow-all-tools" in command
+        output_path.write_text("TASK_COMPLETED: TASK-011\n", encoding="utf-8")
+        log_path.write_text("Copilot completed the task\n", encoding="utf-8")
+        tasks_path.write_text(
+            tasks_path.read_text(encoding="utf-8").replace(
+                "- Status: pending",
+                "- Status: completed",
+            ),
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(runner_module, "resolve_copilot_executable", lambda value: value)
+    monkeypatch.setattr(runner_module, "require_git_output", fake_git_output)
+    monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
+    monkeypatch.setattr(
+        runner_module,
+        "build_codex_environment",
+        lambda *args, **kwargs: {},
+    )
+    monkeypatch.setattr(runner_module, "run_copilot", fake_run_copilot)
+    monkeypatch.setattr(runner_module, "commit_loop_changes", fake_commit_loop_changes)
+    monkeypatch.setattr(
+        runner_module,
+        "commit_count",
+        lambda repo, before, after: int(before != after),
+    )
+
+    result = run(
+        repo=tmp_path,
+        prompt_path=prompt_path,
+        provider="copilot",
+        auto_approve=True,
+        max_loops=1,
+    )
+
+    assert result == ExitCode.SUCCESS
+    assert copilot_calls == 1
+    log_names = [path.name for path in (tmp_path / "logs").iterdir()]
+    assert len(log_names) == 1
+    assert log_names[0].endswith("_011_completed.log")
+
+
+def test_run_reports_copilot_failure_when_the_process_exits_nonzero(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Stop with an agent failure exit code when Copilot exits non-zero."""
+    prompt_path = tmp_path / "prompt.md"
+    prompt_path.write_text("one loop", encoding="utf-8")
+    _write_tasks(
+        tmp_path / "TASKS.md",
+        """## TASK-012: copilot task
+
+- Status: pending
+- Priority: 1
+- Depends on: none
+""",
+    )
+
+    def fake_run_copilot(
+        command: list[str],
+        repo: Path,
+        log_path: Path,
+        environment: dict[str, str],
+        prompt: str,
+        output_path: Path,
+        timeout_sec: int,
+    ) -> subprocess.CompletedProcess[str]:
+        del repo, environment, prompt, output_path, timeout_sec
+        log_path.write_text("fatal error\n", encoding="utf-8")
+        return subprocess.CompletedProcess(command, 1)
+
+    monkeypatch.setattr(runner_module, "resolve_copilot_executable", lambda value: value)
+    monkeypatch.setattr(
+        runner_module,
+        "require_git_output",
+        _fake_git_output_factory(tmp_path),
+    )
+    monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
+    monkeypatch.setattr(
+        runner_module,
+        "build_codex_environment",
+        lambda *args, **kwargs: {},
+    )
+    monkeypatch.setattr(runner_module, "run_copilot", fake_run_copilot)
+
+    result = run(
+        repo=tmp_path,
+        prompt_path=prompt_path,
+        provider="copilot",
+        auto_approve=True,
+        max_loops=1,
+        api_retry_count=None,
+    )
+
+    assert result == ExitCode.CODEX_FAILURE
+    log_names = [path.name for path in (tmp_path / "logs").iterdir()]
+    assert len(log_names) == 1
+    assert log_names[0].endswith("_012_copilot-failure.log")

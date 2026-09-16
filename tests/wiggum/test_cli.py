@@ -29,6 +29,33 @@ def test_parse_args_run_defaults_to_the_current_directory() -> None:
     assert args.model_verbosity == "low"
     assert args.tool_output_token_limit == 12_000
     assert args.lean is False
+    assert args.provider == "codex"
+    assert args.executable is None
+    assert args.codex is None
+
+
+def test_parse_args_run_accepts_a_provider_and_executable() -> None:
+    """Parse an explicit provider selection and generic executable override."""
+    args = _parse_args(
+        [
+            "run",
+            "--provider",
+            "copilot",
+            "--executable",
+            "/opt/copilot",
+            "--auto-approve",
+        ]
+    )
+
+    assert args.provider == "copilot"
+    assert args.executable == "/opt/copilot"
+    assert args.auto_approve is True
+
+
+def test_parse_args_run_rejects_an_unsupported_provider() -> None:
+    """Reject a --provider value outside the supported choices."""
+    with pytest.raises(SystemExit):
+        _parse_args(["run", "--provider", "unsupported"])
 
 
 def test_parse_args_run_accepts_token_saving_controls() -> None:
@@ -94,3 +121,56 @@ def test_main_init_reports_preflight_error_on_existing_files(
     exit_code = main(["init", "--repo", str(tmp_path)])
 
     assert exit_code == ExitCode.PREFLIGHT_ERROR
+
+
+def test_main_run_forwards_the_default_provider_and_codex_executable(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Forward the default provider and the legacy codex_executable value."""
+    captured: dict[str, object] = {}
+
+    def fake_run(**kwargs: object) -> ExitCode:
+        captured.update(kwargs)
+        return ExitCode.SUCCESS
+
+    monkeypatch.setattr(cli_module, "run", fake_run)
+
+    exit_code = main(["run", "--repo", str(tmp_path)])
+
+    assert exit_code == ExitCode.SUCCESS
+    assert captured["provider"] == "codex"
+    assert captured["codex_executable"] == "codex"
+    assert captured["executable"] is None
+
+
+def test_main_run_forwards_an_explicit_provider_and_executable(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Forward an explicit provider selection and executable override."""
+    captured: dict[str, object] = {}
+
+    def fake_run(**kwargs: object) -> ExitCode:
+        captured.update(kwargs)
+        return ExitCode.SUCCESS
+
+    monkeypatch.setattr(cli_module, "run", fake_run)
+
+    exit_code = main(
+        [
+            "run",
+            "--repo",
+            str(tmp_path),
+            "--provider",
+            "copilot",
+            "--executable",
+            "/opt/copilot",
+            "--auto-approve",
+        ]
+    )
+
+    assert exit_code == ExitCode.SUCCESS
+    assert captured["provider"] == "copilot"
+    assert captured["executable"] == "/opt/copilot"
+    assert captured["auto_approve"] is True

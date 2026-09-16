@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 import tempfile
 from collections.abc import Sequence
@@ -15,6 +14,7 @@ from wiggum.defaults import (
     DEFAULT_REASONING_EFFORT,
     DEFAULT_TOOL_OUTPUT_TOKEN_LIMIT,
 )
+from wiggum.executable_resolution import resolve_executable
 
 
 def resolve_codex_executable(executable: str) -> str | None:
@@ -30,14 +30,7 @@ def resolve_codex_executable(executable: str) -> str | None:
     str | None
         Absolute executable path, or ``None`` when it cannot be found.
     """
-    executable_path = Path(executable)
-    if executable_path.is_file():
-        return str(executable_path.resolve())
-
-    resolved_path = shutil.which(executable)
-    if resolved_path is None:
-        return None
-    return str(Path(resolved_path).resolve())
+    return resolve_executable(executable)
 
 
 def build_codex_command(
