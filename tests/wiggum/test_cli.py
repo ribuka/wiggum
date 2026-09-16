@@ -25,6 +25,31 @@ def test_parse_args_run_defaults_to_the_current_directory() -> None:
     assert args.no_managed_env is False
     assert args.max_loops == 20
     assert args.api_retry_count is None
+    assert args.reasoning_effort == "medium"
+    assert args.model_verbosity == "low"
+    assert args.tool_output_token_limit == 12_000
+    assert args.lean is False
+
+
+def test_parse_args_run_accepts_token_saving_controls() -> None:
+    """Parse explicit reasoning, verbosity, tool-output, and lean settings."""
+    args = _parse_args(
+        [
+            "run",
+            "--reasoning-effort",
+            "medium",
+            "--model-verbosity",
+            "high",
+            "--tool-output-token-limit",
+            "1234",
+            "--lean",
+        ]
+    )
+
+    assert args.reasoning_effort == "medium"
+    assert args.model_verbosity == "high"
+    assert args.tool_output_token_limit == 1234
+    assert args.lean is True
 
 
 def test_parse_args_init_defaults_to_the_current_directory() -> None:

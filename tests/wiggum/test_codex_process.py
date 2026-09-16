@@ -34,12 +34,16 @@ def test_build_codex_command_uses_sandbox_by_default(tmp_path: Path) -> None:
     command = build_codex_command("codex", tmp_path, output_path, None)
 
     assert command[0] == "codex"
+    assert "--json" in command
     assert "--sandbox" in command
     assert command[command.index("--sandbox") + 1] == "workspace-write"
     assert "--approve-for-me" not in command
     assert command[-1] == "-"
     assert str(tmp_path) in command
     assert str(output_path) in command
+    assert 'model_reasoning_effort="medium"' in command
+    assert 'model_verbosity="low"' in command
+    assert "tool_output_token_limit=12000" in command
 
 
 def test_build_codex_command_uses_approve_for_me_when_auto_approve(tmp_path: Path) -> None:
@@ -57,6 +61,28 @@ def test_build_codex_command_uses_approve_for_me_when_auto_approve(tmp_path: Pat
     assert "--approve-for-me" in command
     assert "--sandbox" not in command
     assert command[command.index("--model") + 1] == "gpt-test"
+
+
+def test_build_codex_command_applies_token_controls_and_lean_mode(
+    tmp_path: Path,
+) -> None:
+    """Build an isolated command with explicit token-saving configuration."""
+    command = build_codex_command(
+        "codex",
+        tmp_path,
+        tmp_path / "last-message.txt",
+        None,
+        reasoning_effort="medium",
+        model_verbosity="high",
+        tool_output_token_limit=1234,
+        lean=True,
+    )
+
+    assert "--ignore-user-config" in command
+    assert 'model_reasoning_effort="medium"' in command
+    assert 'model_verbosity="high"' in command
+    assert "tool_output_token_limit=1234" in command
+    assert 'model_reasoning_summary="none"' in command
 
 
 def test_build_codex_environment_sets_isolated_paths_by_default(tmp_path: Path) -> None:
@@ -104,6 +130,24 @@ def test_run_codex_writes_combined_output_and_stdin_prompt_to_the_log_file(tmp_p
 
     assert completed.returncode == 0
     assert log_path.read_text(encoding="utf-8") == "first line\nsecond line\n"
+
+
+def test_run_codex_encodes_standard_input_as_utf8(tmp_path: Path) -> None:
+    """Send non-ASCII prompts to Codex as UTF-8 regardless of the system locale."""
+    log_path = tmp_path / "loop.log"
+    prompt = "日本語のプロンプト"
+    command = [sys.executable, "-c", "import sys; print(sys.stdin.buffer.read().hex())"]
+
+    completed = run_codex(
+        command,
+        tmp_path,
+        log_path,
+        environment=os.environ.copy(),
+        prompt=prompt,
+    )
+
+    assert completed.returncode == 0
+    assert log_path.read_text(encoding="utf-8") == f"{prompt.encode('utf-8').hex()}\n"
 
 
 def test_is_retryable_codex_failure_matches_only_transport_errors(tmp_path: Path) -> None:
