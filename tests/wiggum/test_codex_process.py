@@ -106,6 +106,24 @@ def test_run_codex_writes_combined_output_and_stdin_prompt_to_the_log_file(tmp_p
     assert log_path.read_text(encoding="utf-8") == "first line\nsecond line\n"
 
 
+def test_run_codex_encodes_standard_input_as_utf8(tmp_path: Path) -> None:
+    """Send non-ASCII prompts to Codex as UTF-8 regardless of the system locale."""
+    log_path = tmp_path / "loop.log"
+    prompt = "日本語のプロンプト"
+    command = [sys.executable, "-c", "import sys; print(sys.stdin.buffer.read().hex())"]
+
+    completed = run_codex(
+        command,
+        tmp_path,
+        log_path,
+        environment=os.environ.copy(),
+        prompt=prompt,
+    )
+
+    assert completed.returncode == 0
+    assert log_path.read_text(encoding="utf-8") == f"{prompt.encode('utf-8').hex()}\n"
+
+
 def test_is_retryable_codex_failure_matches_only_transport_errors(tmp_path: Path) -> None:
     """Recognize known transient connection failures in Codex logs."""
     log_path = tmp_path / "codex.log"

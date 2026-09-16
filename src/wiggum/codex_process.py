@@ -166,6 +166,7 @@ def run_codex(
             stdout=log_file,
             stderr=subprocess.STDOUT,
             text=True,
+            encoding="utf-8",
             env=environment,
             input=prompt,
             timeout=timeout_sec,
