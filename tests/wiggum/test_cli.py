@@ -109,7 +109,7 @@ def test_main_init_reports_success(
     tmp_path: Path,
 ) -> None:
     """Report success and log every written path for the init subcommand."""
-    written = [tmp_path / "RALPH.md", tmp_path / "TASKS.md"]
+    written = [tmp_path / "RALPH.md", tmp_path / "TASKS.json"]
     monkeypatch.setattr(cli_module, "scaffold", lambda repo, *, force: written)
 
     exit_code = main(["init", "--repo", str(tmp_path)])
@@ -124,7 +124,7 @@ def test_main_init_reports_preflight_error_on_existing_files(
     """Report a preflight error when scaffolding refuses to overwrite files."""
 
     def _raise(repo: Path, *, force: bool) -> list[Path]:
-        raise FileExistsError("refusing to overwrite existing files: TASKS.md")
+        raise FileExistsError("refusing to overwrite existing files: TASKS.json")
 
     monkeypatch.setattr(cli_module, "scaffold", _raise)
 

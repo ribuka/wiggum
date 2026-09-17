@@ -1,0 +1,22 @@
+{
+  "tasks": [
+    {
+      "id": "TASK-001",
+      "title": "Example task title",
+      "status": "pending",
+      "priority": 1,
+      "depends_on": [],
+      "requirements": [
+        "Describe the required behavior here."
+      ],
+      "tests": [
+        "Describe the required test coverage here."
+      ],
+      "acceptance_commands": [
+        "<TODO: targeted test command>",
+        "<TODO: full test suite command>",
+        "<TODO: lint command>"
+      ]
+    }
+  ]
+}

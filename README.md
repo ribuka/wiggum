@@ -3,7 +3,7 @@
 ## 日本語
 
 wiggum は Codex CLI と GitHub Copilot CLI の両方に対応した、再利用できる Ralph
-ループランナーです。プロジェクトの `TASKS.md` 台帳から未完了のタスクを 1 件選び、
+ループランナーです。プロジェクトの `TASKS.json` 台帳から未完了のタスクを 1 件選び、
 選択した AI モデルベンダーの CLI で Ralph ループ 1 回分だけを実行し、ループの終了
 ステータスを検証して変更をコミットします。台帳が完了するか、停止条件に達するまで
 これを繰り返します。既定のベンダーは Codex CLI (`codex exec`) で、`--provider codex`
@@ -28,10 +28,10 @@ uv add git+https://github.com/ribuka/wiggum.git
 uv run wiggum init
 ```
 
-このコマンドは対象リポジトリに `RALPH_PROJECT.md`、`ralph_prompt.md`、`TASKS.md` を
+このコマンドは対象リポジトリに `RALPH_PROJECT.md`、`ralph_prompt.md`、`TASKS.json` を
 作成します（`--repo` の既定値はカレントディレクトリです）。Ralph の共通ルールは
 wiggum に同梱されています。ループを実行する前に、プロジェクトに合わせて
-`RALPH_PROJECT.md` と `TASKS.md` を編集してください。既存のファイルを上書きするには
+`RALPH_PROJECT.md` と `TASKS.json` を編集してください。既存のファイルを上書きするには
 `--force` を使用します。
 
 #### リポジトリルートのファイル
@@ -39,7 +39,7 @@ wiggum に同梱されています。ループを実行する前に、プロジ�
 標準の `wiggum run` コマンドでは、対象リポジトリに次のファイルが必要です。
 
 - `.git/` — リポジトリのメタデータ。`--repo` にはこの Git ルートを指定します。
-- `TASKS.md` — `--tasks-file` で別のパスを指定しない場合のタスク台帳です。
+- `TASKS.json` — `--tasks-file` で別のパスを指定しない場合のタスク台帳です。
 - `RALPH_PROJECT.md` — 検証コマンドと各ループで読むファイルを含む、リポジトリ固有の指示です。
 
 対象リポジトリに `RALPH.md` は不要です。Ralph の共通ルールは wiggum が提供します。
@@ -57,7 +57,7 @@ uv run wiggum run
 主なオプション:
 
 - `--repo PATH` — 操作対象のリポジトリ（既定値: カレントディレクトリ）。
-- `--tasks-file PATH` — タスク台帳（既定値: `<repo>/TASKS.md`）。
+- `--tasks-file PATH` — タスク台帳（既定値: `<repo>/TASKS.json`）。
 - `--prompt-file PATH` — 各ループでエージェントに渡すプロンプト（既定値: wiggum 同梱の Ralph ループプロンプト）。
 - `--logs-dir PATH` / `--temp-dir PATH` / `--uv-cache-dir PATH` — ループログ、一時ファイル、uv キャッシュの出力先を上書きします。
 - `--no-managed-env` — 子プロセスに `UV_CACHE_DIR`、`TMP`、`TEMP` を設定しません。
@@ -127,7 +127,7 @@ uv run -m ruff check .
 ## English
 
 wiggum is a reusable Ralph loop runner that supports both Codex CLI and GitHub
-Copilot CLI. It selects one pending task from a project's `TASKS.md` ledger,
+Copilot CLI. It selects one pending task from a project's `TASKS.json` ledger,
 runs exactly one Ralph loop with the selected AI model vendor's CLI, verifies
 the loop's terminal status, and commits the loop's changes, repeating until
 the ledger is complete or a stopping condition is hit. The default vendor is
@@ -153,10 +153,10 @@ uv add git+https://github.com/ribuka/wiggum.git
 uv run wiggum init
 ```
 
-This writes `RALPH_PROJECT.md`, `ralph_prompt.md`, and `TASKS.md` into the
+This writes `RALPH_PROJECT.md`, `ralph_prompt.md`, and `TASKS.json` into the
 target repository (`--repo` defaults to the current directory). The general
 Ralph rules are bundled with wiggum. Edit
-`RALPH_PROJECT.md` and `TASKS.md` to match your project before running loops.
+`RALPH_PROJECT.md` and `TASKS.json` to match your project before running loops.
 Use `--force` to overwrite files that already exist.
 
 ### Repository-root files
@@ -164,7 +164,7 @@ Use `--force` to overwrite files that already exist.
 For the standard `wiggum run` command, the target repository must contain:
 
 - `.git/` — the repository metadata; `--repo` must name this Git root.
-- `TASKS.md` — the task ledger, unless `--tasks-file` selects another path.
+- `TASKS.json` — the task ledger, unless `--tasks-file` selects another path.
 - `RALPH_PROJECT.md` — repository-specific instructions, including validation
   commands and the files each loop must read.
 
@@ -183,7 +183,7 @@ uv run wiggum run
 Useful options:
 
 - `--repo PATH` — repository to operate on (default: current directory).
-- `--tasks-file PATH` — task ledger (default: `<repo>/TASKS.md`).
+- `--tasks-file PATH` — task ledger (default: `<repo>/TASKS.json`).
 - `--prompt-file PATH` — prompt passed to the agent for each loop (default:
   wiggum's bundled Ralph loop prompt).
 - `--logs-dir PATH` / `--temp-dir PATH` / `--uv-cache-dir PATH` — override

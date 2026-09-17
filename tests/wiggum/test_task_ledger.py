@@ -1,214 +1,129 @@
-"""Tests for Ralph task ledger parsing and selection."""
+"""Tests for JSON Ralph task ledger validation and selection."""
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from wiggum.task_ledger import (
     read_ralph_tasks,
-    read_task_section,
+    read_task_contract,
     task_progress,
     task_snapshot,
 )
 
 
-def test_task_progress_counts_uncompleted_tasks(tmp_path: Path) -> None:
-    """Count every task while treating only completed status as resolved."""
-    task_file = tmp_path / "TASKS.md"
-    task_file.write_text(
-        """## TASK-001: first
+def _task(task_id: str, **overrides: Any) -> dict[str, object]:
+    """Create a valid task object with optional field overrides.
 
-- Status: completed
-- Priority: 1
-- Depends on: none
+    Parameters
+    ----------
+    task_id : str
+        Task identifier.
+    **overrides : Any
+        Replacement field values.
 
-## TASK-002: second
-
-- Status: pending
-- Priority: 2
-- Depends on: TASK-001
-
-## TASK-003: third
-
-- Status: blocked
-- Priority: 3
-- Depends on: TASK-002""",
-        encoding="utf-8",
-    )
-
-    assert task_progress(task_file) == (2, 3)
-
-
-def test_task_snapshot_selects_by_dependencies_priority_and_id(tmp_path: Path) -> None:
-    """Select the lowest-priority eligible task and use its ID as a tie-breaker."""
-    task_file = tmp_path / "TASKS.md"
-    task_file.write_text(
-        """## TASK-001: completed dependency
-
-- Status: completed
-- Priority: 1
-- Depends on: none
-
-## TASK-004: blocked by an incomplete dependency
-
-- Status: pending
-- Priority: 1
-- Depends on: TASK-003
-
-## TASK-003: eligible later ID
-
-- Status: pending
-- Priority: 2
-- Depends on: TASK-001
-
-## TASK-002: eligible earlier ID
-
-- Status: pending
-- Priority: 2
-- Depends on: TASK-001
-""",
-        encoding="utf-8",
-    )
-
-    assert task_snapshot(task_file) == (3, 4, "TASK-002")
+    Returns
+    -------
+    dict[str, object]
+        Valid task object.
+    """
+    value: dict[str, object] = {
+        "id": task_id,
+        "title": f"Title for {task_id}",
+        "status": "pending",
+        "priority": 1,
+        "depends_on": [],
+        "requirements": ["Implement the behavior."],
+        "tests": ["Add focused coverage."],
+        "acceptance_commands": ["uv run -m pytest"],
+    }
+    value.update(overrides)
+    return value
 
 
-def test_task_snapshot_returns_none_when_no_task_is_eligible(tmp_path: Path) -> None:
-    """Report no eligible task when every pending task has an incomplete dependency."""
-    task_file = tmp_path / "TASKS.md"
-    task_file.write_text(
-        """## TASK-001: blocked
+def _write_ledger(path: Path, tasks: list[dict[str, object]]) -> None:
+    """Write JSON task objects to a ledger path.
 
-- Status: blocked
-- Priority: 1
-- Depends on: none
-
-## TASK-002: dependent
-
-- Status: pending
-- Priority: 2
-- Depends on: TASK-001
-""",
-        encoding="utf-8",
-    )
-
-    assert task_snapshot(task_file) == (2, 2, None)
+    Parameters
+    ----------
+    path : Path
+        Destination ledger path.
+    tasks : list[dict[str, object]]
+        Task objects to serialize.
+    """
+    path.write_text(json.dumps({"tasks": tasks}), encoding="utf-8")
 
 
-def test_read_task_section_returns_only_the_requested_task(tmp_path: Path) -> None:
-    """Return a task heading and body without adjacent task sections."""
-    task_file = tmp_path / "TASKS.md"
-    task_file.write_text(
-        """## TASK-001: first
+def test_task_progress_counts_every_non_completed_status(tmp_path: Path) -> None:
+    """Count pending, in-progress, and blocked tasks as incomplete."""
+    path = tmp_path / "TASKS.json"
+    _write_ledger(path, [_task("TASK-001", status="completed"), _task("TASK-002", status="pending"), _task("TASK-003", status="in_progress"), _task("TASK-004", status="blocked")])
 
-- Status: completed
-
-## TASK-002: selected
-
-- Status: pending
-- Requirements: preserve this text
-
-## TASK-003: later
-
-- Status: pending
-""",
-        encoding="utf-8",
-    )
-
-    assert read_task_section(task_file, "TASK-002") == (
-        "## TASK-002: selected\n\n- Status: pending\n"
-        "- Requirements: preserve this text"
-    )
+    assert task_progress(path) == (3, 4)
 
 
-def test_read_task_section_rejects_an_unknown_task(tmp_path: Path) -> None:
-    """Reject a request for a task identifier that has no section."""
-    task_file = tmp_path / "TASKS.md"
-    task_file.write_text("## TASK-001: only task\n", encoding="utf-8")
+def test_snapshot_selects_by_dependencies_priority_and_id(tmp_path: Path) -> None:
+    """Select the lowest-priority eligible task, then its ID."""
+    path = tmp_path / "TASKS.json"
+    _write_ledger(path, [_task("TASK-001", status="completed"), _task("TASK-004", priority=1, depends_on=["TASK-003"]), _task("TASK-003", priority=2, depends_on=["TASK-001"]), _task("TASK-002", priority=2, depends_on=["TASK-001"])])
 
-    with pytest.raises(ValueError, match="task section not found: TASK-002"):
-        read_task_section(task_file, "TASK-002")
-
-
-def test_read_ralph_tasks_rejects_missing_status_field(tmp_path: Path) -> None:
-    """Reject a task section missing the required Status field."""
-    task_file = tmp_path / "TASKS.md"
-    task_file.write_text(
-        """## TASK-001: missing status
-
-- Priority: 1
-- Depends on: none
-""",
-        encoding="utf-8",
-    )
-
-    with pytest.raises(ValueError, match="TASK-001 has no Status field"):
-        read_ralph_tasks(task_file)
+    assert task_snapshot(path) == (3, 4, "TASK-002")
 
 
-def test_read_ralph_tasks_rejects_invalid_status_value(tmp_path: Path) -> None:
-    """Reject a Status value outside the allowed set."""
-    task_file = tmp_path / "TASKS.md"
-    task_file.write_text(
-        """## TASK-001: invalid status
+def test_snapshot_returns_none_when_no_task_is_eligible(tmp_path: Path) -> None:
+    """Report no candidate when dependencies are incomplete."""
+    path = tmp_path / "TASKS.json"
+    _write_ledger(path, [_task("TASK-001", status="blocked"), _task("TASK-002", depends_on=["TASK-001"])])
 
-- Status: done
-- Priority: 1
-- Depends on: none
-""",
-        encoding="utf-8",
-    )
-
-    with pytest.raises(ValueError, match="TASK-001 has invalid status: done"):
-        read_ralph_tasks(task_file)
+    assert task_snapshot(path) == (2, 2, None)
 
 
-def test_read_ralph_tasks_rejects_duplicate_task_ids(tmp_path: Path) -> None:
-    """Reject a ledger that declares the same task ID twice."""
-    task_file = tmp_path / "TASKS.md"
-    task_file.write_text(
-        """## TASK-001: first
+def test_read_task_contract_returns_only_selected_json_object(tmp_path: Path) -> None:
+    """Return the full JSON contract for the requested task."""
+    path = tmp_path / "TASKS.json"
+    selected = _task("TASK-002", requirements=["Preserve this text."])
+    _write_ledger(path, [_task("TASK-001"), selected, _task("TASK-003")])
 
-- Status: pending
-- Priority: 1
-- Depends on: none
+    assert read_task_contract(path, "TASK-002") == selected
 
-## TASK-001: duplicate
 
-- Status: pending
-- Priority: 2
-- Depends on: none
-""",
-        encoding="utf-8",
-    )
+@pytest.mark.parametrize(
+    ("document", "message"),
+    [
+        ("{", "invalid JSON"),
+        (json.dumps({"tasks": []}), "non-empty array"),
+        (json.dumps({"tasks": [_task("TASK-1")]}), "invalid id"),
+        (json.dumps({"tasks": [_task("TASK-001", status="done")]}), "invalid status"),
+        (json.dumps({"tasks": [_task("TASK-001", priority=0)]}), "invalid priority"),
+        (json.dumps({"tasks": [_task("TASK-001", title="")]}), "invalid title"),
+        (json.dumps({"tasks": [_task("TASK-001", requirements=[])]}), "invalid requirements"),
+        (json.dumps({"tasks": [_task("TASK-001", extra="no")]}), "unknown keys"),
+    ],
+)
+def test_read_ralph_tasks_rejects_invalid_json_or_schema(tmp_path: Path, document: str, message: str) -> None:
+    """Reject malformed documents and invalid fixed-schema fields."""
+    path = tmp_path / "TASKS.json"
+    path.write_text(document, encoding="utf-8")
 
+    with pytest.raises(ValueError, match=message):
+        read_ralph_tasks(path)
+
+
+def test_read_ralph_tasks_rejects_duplicate_and_invalid_dependencies(tmp_path: Path) -> None:
+    """Reject duplicate IDs, undefined dependencies, and self-dependencies."""
+    path = tmp_path / "TASKS.json"
+    _write_ledger(path, [_task("TASK-001"), _task("TASK-001")])
     with pytest.raises(ValueError, match="duplicate task IDs"):
-        read_ralph_tasks(task_file)
+        read_ralph_tasks(path)
 
+    _write_ledger(path, [_task("TASK-001", depends_on=["TASK-999"])])
+    with pytest.raises(ValueError, match="unknown task dependencies"):
+        read_ralph_tasks(path)
 
-def test_read_ralph_tasks_rejects_unknown_dependency(tmp_path: Path) -> None:
-    """Reject a task that depends on an identifier absent from the ledger."""
-    task_file = tmp_path / "TASKS.md"
-    task_file.write_text(
-        """## TASK-001: dangling dependency
-
-- Status: pending
-- Priority: 1
-- Depends on: TASK-999
-""",
-        encoding="utf-8",
-    )
-
-    with pytest.raises(ValueError, match="unknown task dependencies: TASK-999"):
-        read_ralph_tasks(task_file)
-
-
-def test_read_ralph_tasks_rejects_empty_ledger(tmp_path: Path) -> None:
-    """Reject a ledger file that defines no tasks."""
-    task_file = tmp_path / "TASKS.md"
-    task_file.write_text("# Tasks\n\nNo tasks yet.\n", encoding="utf-8")
-
-    with pytest.raises(ValueError, match="no tasks found"):
-        read_ralph_tasks(task_file)
+    _write_ledger(path, [_task("TASK-001", depends_on=["TASK-001"])])
+    with pytest.raises(ValueError, match="cannot depend on itself"):
+        read_ralph_tasks(path)
