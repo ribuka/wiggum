@@ -20,7 +20,7 @@ At the start of each loop, read the following files one at a time in this order:
 5. Existing code and tests related to the selected task
 
 The runner supplies the complete selected task contract in the prompt. Do not
-read `TASKS.md` for task selection or requirements; read it only to update the
+read `TASKS.json` for task selection or requirements; read it only to update the
 selected task's status. Do not search the repository for Ralph instructions
 before reading the files listed above. Begin with implementation and test files
 directly required by that task. Expand to imported or dependent files only when
@@ -28,29 +28,31 @@ needed to understand an active contract or failure. Do not preload files for
 later tasks, and do not read a guessed path that was absent from file-search
 results.
 
-`SPEC.md` defines the product specification, `TASKS.md` is the task ledger, and
+`SPEC.md` defines the product specification, `TASKS.json` is the task ledger, and
 `PROGRESS.md` is the append-only loop record. Do not invent requirements that
 these files do not define.
 
 ## Task ledger and selection
 
-Each task in `TASKS.md` uses a `TASK-XXX` heading and these fields or sections:
+Each task in `TASKS.json` is an object with these required keys:
 
-* `Status`: `pending`, `completed`, or `blocked`
-* `Priority`: numeric selection priority
-* `Depends on`: prerequisite task IDs or `none`
-* `Requirements`: required behavior
-* `Tests`: required verification coverage
-* `Acceptance commands`: commands that must succeed
+* `id`: a unique `TASK-XXX` identifier
+* `title`: a non-empty task title
+* `status`: `pending`, `in_progress`, `completed`, or `blocked`
+* `priority`: numeric selection priority
+* `depends_on`: prerequisite task IDs
+* `requirements`: required behavior
+* `tests`: required verification coverage
+* `acceptance_commands`: commands that must succeed
 
 Apply the general selection rules as follows:
 
-1. Consider only tasks with `Status: pending`.
-2. Confirm that every task listed in `Depends on` has `Status: completed`.
-3. Select the task with the lowest `Priority` value.
+1. Consider only tasks with `status: pending`.
+2. Confirm that every task listed in `depends_on` has `status: completed`.
+3. Select the task with the lowest `priority` value.
 4. If multiple tasks have the same priority, select the lowest `TASK-XXX` ID.
 
-In `TASKS.md`, normally change only the selected task's `Status`. Do not change
+In `TASKS.json`, normally change only the selected task's `status`. Do not change
 requirements, tests, dependencies, or priority during a loop.
 
 ## Tests and acceptance commands
@@ -100,7 +102,7 @@ Append one entry to `PROGRESS.md` for every task loop using this format:
 - Notes: Information required by the next loop
 ```
 
-If new work is discovered, do not add it to `TASKS.md` without approval. Record
+If new work is discovered, do not add it to `TASKS.json` without approval. Record
 it as a candidate task in `PROGRESS.md`.
 
 ## Automated runner
@@ -117,7 +119,7 @@ Run `uv run wiggum run --help` for available options and exit codes.
 ## Git and external operations
 
 * Each loop with repository changes must create exactly one commit containing
-  only files changed in that loop, including `TASKS.md` and `PROGRESS.md` updates.
+  only files changed in that loop, including `TASKS.json` and `PROGRESS.md` updates.
 * The runner starts only from a clean working tree, stages the loop changes,
   checks unstaged and staged diffs for whitespace errors, and creates the
   commit. Codex must review its diff but must not stage or commit it.

@@ -8,7 +8,7 @@ from pathlib import Path
 _TEMPLATE_FILES: dict[str, str] = {
     "RALPH_PROJECT.md": "RALPH_PROJECT.md.template",
     "ralph_prompt.md": "ralph_prompt.md",
-    "TASKS.md": "TASKS.md.template",
+    "TASKS.json": "TASKS.json.template",
 }
 
 

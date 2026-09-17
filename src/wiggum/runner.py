@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 import tempfile
 import time
@@ -42,7 +43,7 @@ from wiggum.providers import (
     get_adapter,
     validate_provider_options,
 )
-from wiggum.task_ledger import read_task_section, task_snapshot
+from wiggum.task_ledger import read_task_contract, task_snapshot
 from wiggum.token_usage import TokenUsage
 from wiggum.tool_output_monitor import read_tool_output_monitor
 
@@ -64,7 +65,7 @@ def _default_prompt_text() -> str:
 def _prompt_for_selected_task(
     prompt: str,
     selected_task_id: str,
-    selected_task_section: str,
+    selected_task_contract: dict[str, object],
 ) -> str:
     """Append the runner-selected task contract to a Codex prompt.
 
@@ -74,8 +75,8 @@ def _prompt_for_selected_task(
         Base prompt containing the general Ralph loop instructions.
     selected_task_id : str
         Task identifier selected from the ledger by the parent runner.
-    selected_task_section : str
-        Complete Markdown section of the selected task.
+    selected_task_contract : dict[str, object]
+        Complete JSON object for the selected task.
 
     Returns
     -------
@@ -87,10 +88,10 @@ def _prompt_for_selected_task(
         "## Runner-selected task\n\n"
         f"The parent runner selected `{selected_task_id}` for this loop. The complete "
         "task contract is below. Work only on it; do not select or start another task. "
-        "Do not read `TASKS.md` to select a task or discover requirements; read it only "
+        "Do not read `TASKS.json` to select a task or discover requirements; read it only "
         "when updating this task's status. If the ledger conflicts with this contract, "
         f"preserve existing changes and report `TASK_BLOCKED: {selected_task_id}`.\n\n"
-        f"{selected_task_section}\n"
+        f"```json\n{json.dumps(selected_task_contract, ensure_ascii=False, indent=2)}\n```\n"
     )
 
 
@@ -265,10 +266,10 @@ def _run(
 
     try:
         incomplete_tasks, total_tasks, selected_task_id = task_snapshot(tasks_path)
-        selected_task_section = (
+        selected_task_contract = (
             None
             if selected_task_id is None
-            else read_task_section(tasks_path, selected_task_id)
+            else read_task_contract(tasks_path, selected_task_id)
         )
     except (OSError, UnicodeError, ValueError) as error:
         logger.error("{}", error)
@@ -287,10 +288,10 @@ def _run(
         if loop_number > 1:
             try:
                 incomplete_tasks, _, selected_task_id = task_snapshot(tasks_path)
-                selected_task_section = (
+                selected_task_contract = (
                     None
                     if selected_task_id is None
-                    else read_task_section(tasks_path, selected_task_id)
+                    else read_task_contract(tasks_path, selected_task_id)
                 )
             except (OSError, UnicodeError, ValueError) as error:
                 logger.error("{}", error)
@@ -332,12 +333,12 @@ def _run(
                 lean=lean,
             )
         )
-        if selected_task_section is None:
-            raise AssertionError("a selected task must have a task section")
+        if selected_task_contract is None:
+            raise AssertionError("a selected task must have a task contract")
         codex_prompt = _prompt_for_selected_task(
             prompt,
             selected_task_id,
-            selected_task_section,
+            selected_task_contract,
         )
         temporary_log_path = create_running_log(logs_dir, started_at, selected_task_id)
         if selected_task_id is not None:
@@ -591,7 +592,7 @@ def run(
     codex_timeout_sec : int, default 1800
         Maximum time to wait for each agent child process.
     tasks_path : Path | None, default None
-        Ralph task ledger file. Defaults to ``<repo>/TASKS.md``.
+        Ralph task ledger file. Defaults to ``<repo>/TASKS.json``.
     logs_dir : Path | None, default None
         Directory that stores loop logs. Defaults to ``<repo>/logs``.
     temp_dir : Path | None, default None
@@ -638,7 +639,7 @@ def run(
             api_retry_count=api_retry_count,
             api_retry_interval_sec=api_retry_interval_sec,
             codex_timeout_sec=codex_timeout_sec,
-            tasks_path=tasks_path if tasks_path is not None else repo / "TASKS.md",
+            tasks_path=tasks_path if tasks_path is not None else repo / "TASKS.json",
             logs_dir=logs_dir if logs_dir is not None else repo / "logs",
             temp_dir=temp_dir if temp_dir is not None else repo / "tmp",
             uv_cache_dir=uv_cache_dir if uv_cache_dir is not None else repo / ".uv-cache",

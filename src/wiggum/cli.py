@@ -38,7 +38,7 @@ def _add_run_arguments(parser: argparse.ArgumentParser) -> None:
         "--tasks-file",
         type=Path,
         default=None,
-        help="Ralph task ledger; defaults to <repo>/TASKS.md",
+        help="Ralph task ledger; defaults to <repo>/TASKS.json",
     )
     parser.add_argument(
         "--prompt-file",
