@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 from wiggum.copilot_process import (
     build_copilot_command,
@@ -120,6 +123,31 @@ def test_run_copilot_excludes_stderr_from_the_last_message(tmp_path: Path) -> No
     assert completed.returncode == 0
     assert output_path.read_text(encoding="utf-8") == "TASK_COMPLETED: TASK-001"
     assert "diagnostic noise" in log_path.read_text(encoding="utf-8")
+
+
+def test_run_copilot_writes_partial_output_to_the_log_on_timeout(tmp_path: Path) -> None:
+    """Preserve whatever output was captured before a Copilot timeout."""
+    log_path = tmp_path / "loop.log"
+    output_path = tmp_path / "last-message.txt"
+    command = [
+        sys.executable,
+        "-c",
+        "import sys, time; print('partial output', flush=True); time.sleep(5)",
+    ]
+
+    with pytest.raises(subprocess.TimeoutExpired):
+        run_copilot(
+            command,
+            tmp_path,
+            log_path,
+            environment=os.environ.copy(),
+            prompt="",
+            output_path=output_path,
+            timeout_sec=1,
+        )
+
+    assert "partial output" in log_path.read_text(encoding="utf-8")
+    assert not output_path.exists()
 
 
 def test_is_retryable_copilot_failure_matches_only_transport_errors(tmp_path: Path) -> None:

@@ -5,6 +5,9 @@ from __future__ import annotations
 import pytest
 
 from wiggum.providers import (
+    ALL_REASONING_EFFORTS,
+    CODEX_REASONING_EFFORTS,
+    COPILOT_REASONING_EFFORTS,
     DEFAULT_EXECUTABLES,
     DEFAULT_PROVIDER,
     PROVIDERS,
@@ -17,6 +20,17 @@ def test_default_provider_is_codex() -> None:
     assert DEFAULT_PROVIDER == "codex"
     assert PROVIDERS == ("codex", "copilot")
     assert DEFAULT_EXECUTABLES == {"codex": "codex", "copilot": "copilot"}
+
+
+def test_reasoning_efforts_differ_per_provider() -> None:
+    """Codex has no max tier and Copilot has no minimal tier."""
+    assert CODEX_REASONING_EFFORTS == ("minimal", "low", "medium", "high", "xhigh")
+    assert COPILOT_REASONING_EFFORTS == ("low", "medium", "high", "xhigh", "max")
+    assert "max" not in CODEX_REASONING_EFFORTS
+    assert "minimal" not in COPILOT_REASONING_EFFORTS
+    assert set(ALL_REASONING_EFFORTS) == set(CODEX_REASONING_EFFORTS) | set(
+        COPILOT_REASONING_EFFORTS
+    )
 
 
 def test_validate_provider_options_allows_any_codex_configuration() -> None:
@@ -75,10 +89,43 @@ def test_validate_provider_options_allows_copilot_reasoning_effort_override() ->
     assert error is None
 
 
+def test_validate_provider_options_rejects_copilot_max_effort_for_codex() -> None:
+    """Reject a Copilot-only reasoning-effort level for the codex provider."""
+    error = validate_provider_options(
+        "codex",
+        reasoning_effort="max",
+        model_verbosity="low",
+        tool_output_token_limit=12_000,
+        lean=False,
+        auto_approve=False,
+    )
+
+    assert error == (
+        "--provider codex does not support --reasoning-effort max "
+        "(supported: minimal, low, medium, high, xhigh)"
+    )
+
+
+def test_validate_provider_options_rejects_minimal_effort_for_copilot() -> None:
+    """Reject a Codex-only reasoning-effort level for the copilot provider."""
+    error = validate_provider_options(
+        "copilot",
+        reasoning_effort="minimal",
+        model_verbosity="low",
+        tool_output_token_limit=12_000,
+        lean=False,
+        auto_approve=True,
+    )
+
+    assert error == (
+        "--provider copilot does not support --reasoning-effort minimal "
+        "(supported: low, medium, high, xhigh, max)"
+    )
+
+
 @pytest.mark.parametrize(
     ("kwargs", "expected_option"),
     [
-        ({"reasoning_effort": "minimal"}, "--reasoning-effort minimal"),
         ({"model_verbosity": "high"}, "--model-verbosity"),
         ({"tool_output_token_limit": 1}, "--tool-output-token-limit"),
         ({"lean": True}, "--lean"),

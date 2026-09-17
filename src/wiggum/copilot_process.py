@@ -9,6 +9,29 @@ from wiggum.defaults import DEFAULT_CODEX_TIMEOUT_SEC, DEFAULT_REASONING_EFFORT
 from wiggum.executable_resolution import resolve_executable
 
 
+def _decode(output: str | bytes | None) -> str:
+    """Decode subprocess output that may be ``str``, ``bytes``, or ``None``.
+
+    Parameters
+    ----------
+    output : str | bytes | None
+        Captured standard output or standard error. ``subprocess.run``
+        normally decodes this per ``text``/``encoding``, but
+        ``TimeoutExpired`` always carries raw bytes regardless of those
+        settings.
+
+    Returns
+    -------
+    str
+        Decoded text, or an empty string when ``output`` is ``None``.
+    """
+    if output is None:
+        return ""
+    if isinstance(output, bytes):
+        return output.decode("utf-8", errors="replace")
+    return output
+
+
 def resolve_copilot_executable(executable: str) -> str | None:
     """Resolve a GitHub Copilot CLI executable name to an absolute path.
 
@@ -114,18 +137,33 @@ def run_copilot(
     -------
     subprocess.CompletedProcess[str]
         Completed Copilot process.
+
+    Raises
+    ------
+    subprocess.TimeoutExpired
+        Re-raised after writing whatever standard output and standard error
+        the Copilot process produced before the timeout to ``log_path``, so
+        a timed-out attempt still leaves diagnostic output behind.
     """
-    completed = subprocess.run(
-        command,
-        cwd=repo,
-        check=False,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        env=environment,
-        input=prompt,
-        timeout=timeout_sec,
-    )
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=repo,
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            env=environment,
+            input=prompt,
+            timeout=timeout_sec,
+        )
+    except subprocess.TimeoutExpired as error:
+        # TimeoutExpired always carries bytes in stdout/stderr, even when the
+        # underlying Popen was configured with text=True.
+        partial_stdout = _decode(error.stdout)
+        partial_stderr = _decode(error.stderr)
+        log_path.write_text(partial_stdout + partial_stderr, encoding="utf-8")
+        raise
     log_path.write_text(completed.stdout + completed.stderr, encoding="utf-8")
     if completed.returncode == 0:
         output_path.write_text(completed.stdout, encoding="utf-8")

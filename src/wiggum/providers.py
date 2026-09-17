@@ -3,7 +3,7 @@
 Codex CLI and GitHub Copilot CLI expose different command-line surfaces for
 model selection, approval/sandbox handling, and token-usage reporting. This
 module defines the provider names wiggum accepts and validates that
-Codex-only options are not silently ignored when GitHub Copilot is selected.
+provider-specific options are not silently ignored or misapplied.
 """
 
 from __future__ import annotations
@@ -18,9 +18,20 @@ COPILOT = "copilot"
 PROVIDERS = (CODEX, COPILOT)
 DEFAULT_PROVIDER = CODEX
 DEFAULT_EXECUTABLES = {CODEX: "codex", COPILOT: "copilot"}
-# GitHub Copilot CLI supports --reasoning-effort but, unlike Codex, has no
-# "minimal" level.
-COPILOT_REASONING_EFFORTS = ("low", "medium", "high", "xhigh")
+
+# Each provider CLI supports a different set of --reasoning-effort levels:
+# Codex has no "max" tier, and GitHub Copilot CLI has no "minimal" tier.
+CODEX_REASONING_EFFORTS = ("minimal", "low", "medium", "high", "xhigh")
+COPILOT_REASONING_EFFORTS = ("low", "medium", "high", "xhigh", "max")
+REASONING_EFFORTS_BY_PROVIDER = {
+    CODEX: CODEX_REASONING_EFFORTS,
+    COPILOT: COPILOT_REASONING_EFFORTS,
+}
+# Union of every provider's supported levels, in first-seen order, for CLI
+# argument parsing before a provider-specific check can run.
+ALL_REASONING_EFFORTS = tuple(
+    dict.fromkeys(CODEX_REASONING_EFFORTS + COPILOT_REASONING_EFFORTS)
+)
 
 
 def validate_provider_options(
@@ -39,8 +50,8 @@ def validate_provider_options(
     provider : str
         Selected AI model vendor; one of :data:`PROVIDERS`.
     reasoning_effort : str
-        Requested reasoning effort. Supported by both providers, but GitHub
-        Copilot CLI has no ``"minimal"`` level.
+        Requested reasoning effort. Each provider supports a different set of
+        levels; see :data:`REASONING_EFFORTS_BY_PROVIDER`.
     model_verbosity : str
         Requested model verbosity, a Codex-only inline configuration value.
     tool_output_token_limit : int
@@ -62,12 +73,17 @@ def validate_provider_options(
     """
     if provider not in PROVIDERS:
         return f"--provider has an unsupported value: {provider}"
+    allowed_efforts = REASONING_EFFORTS_BY_PROVIDER[provider]
+    if reasoning_effort not in allowed_efforts:
+        supported = ", ".join(allowed_efforts)
+        return (
+            f"--provider {provider} does not support --reasoning-effort "
+            f"{reasoning_effort} (supported: {supported})"
+        )
     if provider != COPILOT:
         return None
 
     unsupported: list[str] = []
-    if reasoning_effort not in COPILOT_REASONING_EFFORTS:
-        unsupported.append("--reasoning-effort minimal")
     if model_verbosity != DEFAULT_MODEL_VERBOSITY:
         unsupported.append("--model-verbosity")
     if tool_output_token_limit != DEFAULT_TOOL_OUTPUT_TOKEN_LIMIT:

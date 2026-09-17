@@ -11,20 +11,8 @@ from pathlib import Path
 
 from loguru import logger
 
-from wiggum.codex_process import (
-    build_codex_command,
-    build_codex_environment,
-    is_retryable_codex_failure,
-    resolve_codex_executable,
-    run_codex,
-)
-from wiggum.codex_usage import TokenUsage, read_codex_usage
-from wiggum.copilot_process import (
-    build_copilot_command,
-    is_retryable_copilot_failure,
-    resolve_copilot_executable,
-    run_copilot,
-)
+from wiggum.codex_process import build_codex_environment
+from wiggum.codex_usage import TokenUsage
 from wiggum.defaults import (
     DEFAULT_API_RETRY_COUNT,
     DEFAULT_API_RETRY_INTERVAL_SEC,
@@ -34,7 +22,6 @@ from wiggum.defaults import (
     DEFAULT_REASONING_EFFORT,
     DEFAULT_TOOL_OUTPUT_TOKEN_LIMIT,
     MODEL_VERBOSITIES,
-    REASONING_EFFORTS,
 )
 from wiggum.exit_codes import ExitCode
 from wiggum.git_ops import (
@@ -46,36 +33,15 @@ from wiggum.git_ops import (
 )
 from wiggum.loop_log import create_running_log, finalize_log
 from wiggum.protocol import classify_output, validate_selected_task
+from wiggum.provider_adapters import CommandOptions, get_adapter
 from wiggum.providers import (
+    ALL_REASONING_EFFORTS,
     DEFAULT_EXECUTABLES,
     DEFAULT_PROVIDER,
     validate_provider_options,
 )
 from wiggum.task_ledger import read_task_section, task_snapshot
 from wiggum.tool_output_monitor import read_tool_output_monitor
-
-
-def _read_provider_usage(provider: str, log_path: Path) -> TokenUsage:
-    """Read token usage reported by the selected provider's process log.
-
-    Parameters
-    ----------
-    provider : str
-        Selected AI model vendor.
-    log_path : Path
-        Combined provider process log.
-
-    Returns
-    -------
-    TokenUsage
-        Token usage parsed from the log. GitHub Copilot CLI does not expose
-        a machine-readable per-turn usage event comparable to Codex's JSONL
-        ``turn.completed`` event, so Copilot loops always report all-zero
-        usage.
-    """
-    if provider == "codex":
-        return read_codex_usage(log_path)
-    return TokenUsage()
 
 
 def _default_prompt_text() -> str:
@@ -243,7 +209,7 @@ def _run(
     if codex_timeout_sec < 1:
         logger.error("--codex-timeout-sec must be at least 1")
         return ExitCode.PREFLIGHT_ERROR
-    if reasoning_effort not in REASONING_EFFORTS:
+    if reasoning_effort not in ALL_REASONING_EFFORTS:
         logger.error("--reasoning-effort has an unsupported value: {}", reasoning_effort)
         return ExitCode.PREFLIGHT_ERROR
     if model_verbosity not in MODEL_VERBOSITIES:
@@ -270,11 +236,8 @@ def _run(
     if required_file_error is not None:
         logger.error("{}", required_file_error)
         return ExitCode.PREFLIGHT_ERROR
-    resolved_executable = (
-        resolve_codex_executable(executable)
-        if provider == "codex"
-        else resolve_copilot_executable(executable)
-    )
+    adapter = get_adapter(provider)
+    resolved_executable = adapter.resolve_executable(executable)
     if resolved_executable is None:
         logger.error("{} executable not found: {}", provider.capitalize(), executable)
         return ExitCode.PREFLIGHT_ERROR
@@ -352,25 +315,19 @@ def _run(
 
         if selected_task_id is None:
             raise AssertionError("an eligible task must be selected before starting Codex")
-        if provider == "codex":
-            command = build_codex_command(
-                resolved_executable,
-                repo,
-                output_path,
-                model,
-                auto_approve,
+        command = adapter.build_command(
+            CommandOptions(
+                executable=resolved_executable,
+                repo=repo,
+                output_path=output_path,
+                model=model,
+                auto_approve=auto_approve,
                 reasoning_effort=reasoning_effort,
                 model_verbosity=model_verbosity,
                 tool_output_token_limit=tool_output_token_limit,
                 lean=lean,
             )
-        else:
-            command = build_copilot_command(
-                resolved_executable,
-                model,
-                auto_approve,
-                reasoning_effort=reasoning_effort,
-            )
+        )
         if selected_task_section is None:
             raise AssertionError("a selected task must have a task section")
         codex_prompt = _prompt_for_selected_task(
@@ -393,33 +350,19 @@ def _run(
         for api_attempt in range(1, retry_count + 2):
             attempt_succeeded = False
             try:
-                if provider == "codex":
-                    completed = run_codex(
-                        command,
-                        repo,
-                        temporary_log_path,
-                        codex_environment,
-                        codex_prompt,
-                        codex_timeout_sec,
-                    )
-                else:
-                    completed = run_copilot(
-                        command,
-                        repo,
-                        temporary_log_path,
-                        codex_environment,
-                        codex_prompt,
-                        output_path,
-                        codex_timeout_sec,
-                    )
+                completed = adapter.run(
+                    command,
+                    repo,
+                    temporary_log_path,
+                    codex_environment,
+                    codex_prompt,
+                    output_path,
+                    codex_timeout_sec,
+                )
                 if completed.returncode != 0:
                     failure = f"{provider.capitalize()} exited with code {completed.returncode}"
                     exit_code = ExitCode.CODEX_FAILURE
-                    retryable = (
-                        is_retryable_codex_failure(temporary_log_path)
-                        if provider == "codex"
-                        else is_retryable_copilot_failure(temporary_log_path)
-                    )
+                    retryable = adapter.is_retryable_failure(temporary_log_path)
                 else:
                     message = output_path.read_text(encoding="utf-8")
                     status, task_id = classify_output(message)
@@ -434,7 +377,7 @@ def _run(
                 exit_code = ExitCode.PROTOCOL_ERROR
                 retryable = False
 
-            attempt_usage = _read_provider_usage(provider, temporary_log_path)
+            attempt_usage = adapter.read_usage(temporary_log_path)
             output_monitor = read_tool_output_monitor(temporary_log_path)
             task_usage += attempt_usage
             run_usage += attempt_usage

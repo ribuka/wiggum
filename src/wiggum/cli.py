@@ -18,10 +18,9 @@ from wiggum.defaults import (
     DEFAULT_REASONING_EFFORT,
     DEFAULT_TOOL_OUTPUT_TOKEN_LIMIT,
     MODEL_VERBOSITIES,
-    REASONING_EFFORTS,
 )
 from wiggum.exit_codes import ExitCode
-from wiggum.providers import DEFAULT_PROVIDER, PROVIDERS
+from wiggum.providers import ALL_REASONING_EFFORTS, DEFAULT_PROVIDER, PROVIDERS
 from wiggum.runner import run
 from wiggum.scaffold import scaffold
 
@@ -105,11 +104,11 @@ def _add_run_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--model", help="optional model override")
     parser.add_argument(
         "--reasoning-effort",
-        choices=REASONING_EFFORTS,
+        choices=ALL_REASONING_EFFORTS,
         default=DEFAULT_REASONING_EFFORT,
         help=(
-            "reasoning effort; defaults to medium (copilot provider does not "
-            "support minimal)"
+            "reasoning effort; defaults to medium (codex does not support "
+            "max; copilot does not support minimal)"
         ),
     )
     parser.add_argument(

@@ -79,6 +79,13 @@ def test_parse_args_run_accepts_token_saving_controls() -> None:
     assert args.lean is True
 
 
+def test_parse_args_run_accepts_a_copilot_only_reasoning_effort() -> None:
+    """Parse --reasoning-effort max, a level only GitHub Copilot CLI supports."""
+    args = _parse_args(["run", "--reasoning-effort", "max"])
+
+    assert args.reasoning_effort == "max"
+
+
 def test_parse_args_init_defaults_to_the_current_directory() -> None:
     """Default the init subcommand's --repo to the current working directory."""
     args = _parse_args(["init"])
