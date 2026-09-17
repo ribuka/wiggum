@@ -8,7 +8,6 @@ from pathlib import Path
 
 from wiggum.codex_process import (
     build_codex_command,
-    build_codex_environment,
     is_retryable_codex_failure,
     resolve_codex_executable,
     run_codex,
@@ -83,36 +82,6 @@ def test_build_codex_command_applies_token_controls_and_lean_mode(
     assert 'model_verbosity="high"' in command
     assert "tool_output_token_limit=1234" in command
     assert 'model_reasoning_summary="none"' in command
-
-
-def test_build_codex_environment_sets_isolated_paths_by_default(tmp_path: Path) -> None:
-    """Inject UV_CACHE_DIR, TMP, and TEMP when process env management is enabled."""
-    temp_dir = tmp_path / "tmp"
-    uv_cache_dir = tmp_path / ".uv-cache"
-
-    environment = build_codex_environment(temp_dir, uv_cache_dir=uv_cache_dir)
-
-    assert environment["UV_CACHE_DIR"] == str(uv_cache_dir.resolve())
-    assert environment["TMP"] == environment["TEMP"]
-    assert Path(environment["TMP"]).is_dir()
-    assert Path(environment["TMP"]).is_relative_to((temp_dir / "runtime").resolve())
-    assert uv_cache_dir.is_dir()
-
-
-def test_build_codex_environment_is_a_no_op_when_disabled(tmp_path: Path) -> None:
-    """Leave the environment untouched when process env management is disabled."""
-    temp_dir = tmp_path / "tmp"
-    uv_cache_dir = tmp_path / ".uv-cache"
-
-    environment = build_codex_environment(
-        temp_dir,
-        uv_cache_dir=uv_cache_dir,
-        manage_process_env=False,
-    )
-
-    assert not uv_cache_dir.exists()
-    assert not (temp_dir / "runtime").exists()
-    assert environment.get("UV_CACHE_DIR") is None
 
 
 def test_run_codex_writes_combined_output_and_stdin_prompt_to_the_log_file(tmp_path: Path) -> None:

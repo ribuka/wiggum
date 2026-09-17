@@ -7,7 +7,8 @@ from pathlib import Path
 
 import pytest
 
-import wiggum.provider_adapters as provider_adapters_module
+import wiggum.providers.codex as codex_provider_module
+import wiggum.providers.copilot as copilot_provider_module
 import wiggum.runner as runner_module
 from wiggum.exit_codes import ExitCode
 from wiggum.runner import run
@@ -142,7 +143,7 @@ def test_run_rejects_a_missing_required_file_before_starting_dependencies(
     if required_name == "RALPH_PROJECT.md":
         (tmp_path / "TASKS.md").write_text("contents\n", encoding="utf-8")
     monkeypatch.setattr(
-        provider_adapters_module,
+        codex_provider_module,
         "resolve_codex_executable",
         lambda value: pytest.fail("Codex must not be resolved"),
     )
@@ -179,7 +180,7 @@ def test_run_uses_the_bundled_default_prompt_when_prompt_path_is_none(
 - Depends on: none
 """,
     )
-    monkeypatch.setattr(provider_adapters_module, "resolve_codex_executable", lambda value: value)
+    monkeypatch.setattr(codex_provider_module, "resolve_codex_executable", lambda value: value)
     monkeypatch.setattr(runner_module, "require_git_output", _fake_git_output_factory(tmp_path))
     monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
 
@@ -232,7 +233,7 @@ def test_run_logs_runner_progress_loop_and_selected_task_once(
     def record_info(message: str, *args: object) -> None:
         messages.append(message.format(*args))
 
-    monkeypatch.setattr(provider_adapters_module, "resolve_codex_executable", lambda value: value)
+    monkeypatch.setattr(codex_provider_module, "resolve_codex_executable", lambda value: value)
     monkeypatch.setattr(runner_module, "require_git_output", _fake_git_output_factory(tmp_path))
     monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
     monkeypatch.setattr(runner_module.logger, "info", record_info)
@@ -268,11 +269,11 @@ def test_run_does_not_start_codex_when_all_tasks_are_already_complete(
     )
     success_messages: list[str] = []
 
-    monkeypatch.setattr(provider_adapters_module, "resolve_codex_executable", lambda value: value)
+    monkeypatch.setattr(codex_provider_module, "resolve_codex_executable", lambda value: value)
     monkeypatch.setattr(runner_module, "require_git_output", _fake_git_output_factory(tmp_path))
     monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
     monkeypatch.setattr(
-        provider_adapters_module,
+        codex_provider_module,
         "run_codex",
         lambda *args, **kwargs: pytest.fail("Codex must not be started"),
     )
@@ -313,11 +314,11 @@ def test_run_does_not_start_codex_when_no_incomplete_task_is_eligible(
     )
     warning_messages: list[str] = []
 
-    monkeypatch.setattr(provider_adapters_module, "resolve_codex_executable", lambda value: value)
+    monkeypatch.setattr(codex_provider_module, "resolve_codex_executable", lambda value: value)
     monkeypatch.setattr(runner_module, "require_git_output", _fake_git_output_factory(tmp_path))
     monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
     monkeypatch.setattr(
-        provider_adapters_module,
+        codex_provider_module,
         "run_codex",
         lambda *args, **kwargs: pytest.fail("Codex must not be started"),
     )
@@ -403,7 +404,7 @@ def test_run_completes_the_last_task_and_writes_one_log(
         )
         return subprocess.CompletedProcess(command, 0)
 
-    monkeypatch.setattr(provider_adapters_module, "resolve_codex_executable", lambda value: value)
+    monkeypatch.setattr(codex_provider_module, "resolve_codex_executable", lambda value: value)
     monkeypatch.setattr(runner_module, "require_git_output", fake_git_output)
     monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
     monkeypatch.setattr(
@@ -411,7 +412,7 @@ def test_run_completes_the_last_task_and_writes_one_log(
         "build_codex_environment",
         lambda *args, **kwargs: {},
     )
-    monkeypatch.setattr(provider_adapters_module, "run_codex", fake_run_codex)
+    monkeypatch.setattr(codex_provider_module, "run_codex", fake_run_codex)
     monkeypatch.setattr(runner_module, "commit_loop_changes", fake_commit_loop_changes)
     monkeypatch.setattr(
         runner_module,
@@ -483,7 +484,7 @@ def test_run_reports_codex_failure_when_the_process_exits_nonzero(
         log_path.write_text("boom\n", encoding="utf-8")
         return subprocess.CompletedProcess(command, 1)
 
-    monkeypatch.setattr(provider_adapters_module, "resolve_codex_executable", lambda value: value)
+    monkeypatch.setattr(codex_provider_module, "resolve_codex_executable", lambda value: value)
     monkeypatch.setattr(runner_module, "require_git_output", _fake_git_output_factory(tmp_path))
     monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
     monkeypatch.setattr(
@@ -491,7 +492,7 @@ def test_run_reports_codex_failure_when_the_process_exits_nonzero(
         "build_codex_environment",
         lambda *args, **kwargs: {},
     )
-    monkeypatch.setattr(provider_adapters_module, "run_codex", fake_run_codex)
+    monkeypatch.setattr(codex_provider_module, "run_codex", fake_run_codex)
 
     result = run(repo=tmp_path, prompt_path=prompt_path, max_loops=1, api_retry_count=0)
 
@@ -532,7 +533,7 @@ def test_run_reports_protocol_error_for_an_invalid_terminal_token(
         log_path.write_text("codex output\n", encoding="utf-8")
         return subprocess.CompletedProcess(command, 0)
 
-    monkeypatch.setattr(provider_adapters_module, "resolve_codex_executable", lambda value: value)
+    monkeypatch.setattr(codex_provider_module, "resolve_codex_executable", lambda value: value)
     monkeypatch.setattr(runner_module, "require_git_output", _fake_git_output_factory(tmp_path))
     monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
     monkeypatch.setattr(
@@ -540,7 +541,7 @@ def test_run_reports_protocol_error_for_an_invalid_terminal_token(
         "build_codex_environment",
         lambda *args, **kwargs: {},
     )
-    monkeypatch.setattr(provider_adapters_module, "run_codex", fake_run_codex)
+    monkeypatch.setattr(codex_provider_module, "run_codex", fake_run_codex)
 
     result = run(repo=tmp_path, prompt_path=prompt_path, max_loops=1, api_retry_count=0)
 
@@ -583,7 +584,7 @@ def test_run_does_not_retry_a_non_transient_codex_failure(
         log_path.write_text("invalid local configuration\n", encoding="utf-8")
         return subprocess.CompletedProcess(command, 1)
 
-    monkeypatch.setattr(provider_adapters_module, "resolve_codex_executable", lambda value: value)
+    monkeypatch.setattr(codex_provider_module, "resolve_codex_executable", lambda value: value)
     monkeypatch.setattr(runner_module, "require_git_output", _fake_git_output_factory(tmp_path))
     monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
     monkeypatch.setattr(
@@ -591,7 +592,7 @@ def test_run_does_not_retry_a_non_transient_codex_failure(
         "build_codex_environment",
         lambda *args, **kwargs: {},
     )
-    monkeypatch.setattr(provider_adapters_module, "run_codex", fake_run_codex)
+    monkeypatch.setattr(codex_provider_module, "run_codex", fake_run_codex)
 
     result = run(repo=tmp_path, prompt_path=prompt_path, max_loops=1, api_retry_count=1)
 
@@ -632,7 +633,7 @@ def test_run_does_not_retry_a_transient_codex_failure_by_default(
         log_path.write_text("stream disconnected", encoding="utf-8")
         return subprocess.CompletedProcess(command, 1)
 
-    monkeypatch.setattr(provider_adapters_module, "resolve_codex_executable", lambda value: value)
+    monkeypatch.setattr(codex_provider_module, "resolve_codex_executable", lambda value: value)
     monkeypatch.setattr(runner_module, "require_git_output", _fake_git_output_factory(tmp_path))
     monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
     monkeypatch.setattr(
@@ -640,7 +641,7 @@ def test_run_does_not_retry_a_transient_codex_failure_by_default(
         "build_codex_environment",
         lambda *args, **kwargs: {},
     )
-    monkeypatch.setattr(provider_adapters_module, "run_codex", fake_run_codex)
+    monkeypatch.setattr(codex_provider_module, "run_codex", fake_run_codex)
 
     result = run(repo=tmp_path, prompt_path=prompt_path, max_loops=1)
 
@@ -688,7 +689,7 @@ def test_run_allows_incomplete_task_without_changes_or_commit(
         log_path.write_text("agent could not continue\n", encoding="utf-8")
         return subprocess.CompletedProcess(command, 0)
 
-    monkeypatch.setattr(provider_adapters_module, "resolve_codex_executable", lambda value: value)
+    monkeypatch.setattr(codex_provider_module, "resolve_codex_executable", lambda value: value)
     monkeypatch.setattr(runner_module, "require_git_output", fake_git_output)
     monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
     monkeypatch.setattr(runner_module, "has_worktree_changes", lambda repo: False)
@@ -697,7 +698,7 @@ def test_run_allows_incomplete_task_without_changes_or_commit(
         "build_codex_environment",
         lambda *args, **kwargs: {},
     )
-    monkeypatch.setattr(provider_adapters_module, "run_codex", fake_run_codex)
+    monkeypatch.setattr(codex_provider_module, "run_codex", fake_run_codex)
     monkeypatch.setattr(
         runner_module,
         "commit_loop_changes",
@@ -743,24 +744,36 @@ def test_run_rejects_codex_only_options_for_copilot(
     assert any("--provider copilot does not support: --model-verbosity" in m for m in messages)
 
 
-def test_run_rejects_a_copilot_only_reasoning_effort_for_codex(
+def test_run_accepts_a_copilot_only_reasoning_effort_for_codex(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Reject a Copilot-only reasoning-effort level for the codex provider."""
-    messages: list[str] = []
-    monkeypatch.setattr(
-        runner_module.logger,
-        "error",
-        lambda entry, *args: messages.append(entry.format(*args)),
+    """Do not reject reasoning-effort levels by provider in a dry run.
+
+    Support for a given level depends on the selected model, not the
+    provider, so ``--reasoning-effort max`` must reach the Codex command even
+    though Codex CLI itself has no ``minimal``-style provider gate in wiggum.
+    """
+    monkeypatch.setattr(codex_provider_module, "resolve_codex_executable", lambda value: value)
+    monkeypatch.setattr(runner_module, "require_git_output", _fake_git_output_factory(tmp_path))
+    monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
+    prompt_path = tmp_path / "prompt.md"
+    prompt_path.write_text("one loop", encoding="utf-8")
+    _write_tasks(
+        tmp_path / "TASKS.md",
+        """## TASK-001: pending task
+
+- Status: pending
+- Priority: 1
+- Depends on: none
+""",
     )
 
-    result = run(repo=tmp_path, reasoning_effort="max")
+    result = run(repo=tmp_path, prompt_path=prompt_path, reasoning_effort="max", dry_run=True)
 
-    assert result == ExitCode.PREFLIGHT_ERROR
-    assert any(
-        "--provider codex does not support --reasoning-effort max" in m for m in messages
-    )
+    assert result == ExitCode.SUCCESS
+    assert 'model_reasoning_effort=\\"max\\"' in capsys.readouterr().out
 
 
 def test_run_dry_run_prints_a_copilot_command_and_prompt(
@@ -780,7 +793,7 @@ def test_run_dry_run_prints_a_copilot_command_and_prompt(
 - Depends on: none
 """,
     )
-    monkeypatch.setattr(provider_adapters_module, "resolve_copilot_executable", lambda value: value)
+    monkeypatch.setattr(copilot_provider_module, "resolve_copilot_executable", lambda value: value)
     monkeypatch.setattr(
         runner_module,
         "require_git_output",
@@ -864,7 +877,7 @@ def test_run_completes_a_task_with_the_copilot_provider(
         )
         return subprocess.CompletedProcess(command, 0)
 
-    monkeypatch.setattr(provider_adapters_module, "resolve_copilot_executable", lambda value: value)
+    monkeypatch.setattr(copilot_provider_module, "resolve_copilot_executable", lambda value: value)
     monkeypatch.setattr(runner_module, "require_git_output", fake_git_output)
     monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
     monkeypatch.setattr(
@@ -872,7 +885,7 @@ def test_run_completes_a_task_with_the_copilot_provider(
         "build_codex_environment",
         lambda *args, **kwargs: {},
     )
-    monkeypatch.setattr(provider_adapters_module, "run_copilot", fake_run_copilot)
+    monkeypatch.setattr(copilot_provider_module, "run_copilot", fake_run_copilot)
     monkeypatch.setattr(runner_module, "commit_loop_changes", fake_commit_loop_changes)
     monkeypatch.setattr(
         runner_module,
@@ -925,7 +938,7 @@ def test_run_reports_copilot_failure_when_the_process_exits_nonzero(
         log_path.write_text("fatal error\n", encoding="utf-8")
         return subprocess.CompletedProcess(command, 1)
 
-    monkeypatch.setattr(provider_adapters_module, "resolve_copilot_executable", lambda value: value)
+    monkeypatch.setattr(copilot_provider_module, "resolve_copilot_executable", lambda value: value)
     monkeypatch.setattr(
         runner_module,
         "require_git_output",
@@ -937,7 +950,7 @@ def test_run_reports_copilot_failure_when_the_process_exits_nonzero(
         "build_codex_environment",
         lambda *args, **kwargs: {},
     )
-    monkeypatch.setattr(provider_adapters_module, "run_copilot", fake_run_copilot)
+    monkeypatch.setattr(copilot_provider_module, "run_copilot", fake_run_copilot)
 
     result = run(
         repo=tmp_path,

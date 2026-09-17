@@ -70,9 +70,8 @@ def build_copilot_command(
         be enabled; callers must validate that before building the command.
     reasoning_effort : str, default "medium"
         Reasoning effort passed to Copilot's ``--reasoning-effort`` flag.
-        Callers must validate that this is one of
-        :data:`wiggum.providers.COPILOT_REASONING_EFFORTS` before building
-        the command; GitHub Copilot CLI has no ``"minimal"`` level.
+        Support for a given level depends on the selected model, not this
+        provider; Copilot CLI rejects an unsupported combination itself.
 
     Returns
     -------

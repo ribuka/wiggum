@@ -11,8 +11,6 @@ from pathlib import Path
 
 from loguru import logger
 
-from wiggum.codex_process import build_codex_environment
-from wiggum.codex_usage import TokenUsage
 from wiggum.defaults import (
     DEFAULT_API_RETRY_COUNT,
     DEFAULT_API_RETRY_INTERVAL_SEC,
@@ -32,15 +30,20 @@ from wiggum.git_ops import (
     require_git_output,
 )
 from wiggum.loop_log import create_running_log, finalize_log
+from wiggum.process_environment import (
+    build_process_environment as build_codex_environment,
+)
 from wiggum.protocol import classify_output, validate_selected_task
-from wiggum.provider_adapters import CommandOptions, get_adapter
 from wiggum.providers import (
-    ALL_REASONING_EFFORTS,
     DEFAULT_EXECUTABLES,
     DEFAULT_PROVIDER,
+    REASONING_EFFORTS,
+    CommandOptions,
+    get_adapter,
     validate_provider_options,
 )
 from wiggum.task_ledger import read_task_section, task_snapshot
+from wiggum.token_usage import TokenUsage
 from wiggum.tool_output_monitor import read_tool_output_monitor
 
 
@@ -154,8 +157,9 @@ def _run(
     model : str | None
         Optional model override.
     reasoning_effort : str
-        Codex reasoning effort for each loop. Codex-only; must be left at
-        its default value for the ``copilot`` provider.
+        Reasoning effort for each loop. Support for a given level depends on
+        the selected model, not the provider; the provider CLI rejects an
+        unsupported combination itself.
     model_verbosity : str
         Codex model verbosity for each loop. Codex-only; must be left at its
         default value for the ``copilot`` provider.
@@ -209,7 +213,7 @@ def _run(
     if codex_timeout_sec < 1:
         logger.error("--codex-timeout-sec must be at least 1")
         return ExitCode.PREFLIGHT_ERROR
-    if reasoning_effort not in ALL_REASONING_EFFORTS:
+    if reasoning_effort not in REASONING_EFFORTS:
         logger.error("--reasoning-effort has an unsupported value: {}", reasoning_effort)
         return ExitCode.PREFLIGHT_ERROR
     if model_verbosity not in MODEL_VERBOSITIES:
@@ -561,8 +565,9 @@ def run(
     model : str | None, default None
         Optional model override.
     reasoning_effort : str, default "medium"
-        Codex reasoning effort for each loop. Codex-only; must be left at
-        its default value for the ``copilot`` provider.
+        Reasoning effort for each loop. Support for a given level depends on
+        the selected model, not the provider; the provider CLI rejects an
+        unsupported combination itself.
     model_verbosity : str, default "low"
         Codex model verbosity for each loop. Codex-only; must be left at its
         default value for the ``copilot`` provider.
