@@ -2,10 +2,12 @@
 
 ## 日本語
 
-wiggum は Codex CLI 向けに再利用できる Ralph ループランナーです。プロジェクトの
-`TASKS.md` 台帳から未完了のタスクを 1 件選び、Ralph ループ 1 回分だけ `codex exec` を
-実行し、ループの終了ステータスを検証して変更をコミットします。台帳が完了するか、停止
-条件に達するまでこれを繰り返します。
+wiggum は Codex CLI と GitHub Copilot CLI の両方に対応した、再利用できる Ralph
+ループランナーです。プロジェクトの `TASKS.md` 台帳から未完了のタスクを 1 件選び、
+選択した AI モデルベンダーの CLI で Ralph ループ 1 回分だけを実行し、ループの終了
+ステータスを検証して変更をコミットします。台帳が完了するか、停止条件に達するまで
+これを繰り返します。既定のベンダーは Codex CLI (`codex exec`) で、`--provider codex`
+を明示指定した場合と同じ挙動です。
 
 wiggum 自体はプロジェクトの仕様やタスクを定義しません。まず `wiggum init` で Ralph
 ループ用のファイルをリポジトリに生成し、その後プロジェクトに合わせて編集してください。
@@ -56,18 +58,31 @@ uv run wiggum run
 
 - `--repo PATH` — 操作対象のリポジトリ（既定値: カレントディレクトリ）。
 - `--tasks-file PATH` — タスク台帳（既定値: `<repo>/TASKS.md`）。
-- `--prompt-file PATH` — 各ループで Codex に渡すプロンプト（既定値: wiggum 同梱の Ralph ループプロンプト）。
+- `--prompt-file PATH` — 各ループでエージェントに渡すプロンプト（既定値: wiggum 同梱の Ralph ループプロンプト）。
 - `--logs-dir PATH` / `--temp-dir PATH` / `--uv-cache-dir PATH` — ループログ、一時ファイル、uv キャッシュの出力先を上書きします。
-- `--no-managed-env` — Codex の子プロセスに `UV_CACHE_DIR`、`TMP`、`TEMP` を設定しません。
-- `--reasoning-effort LEVEL` — Codex の推論量（既定値: `medium`）。
-- `--model-verbosity LEVEL` — Codex の出力 verbosity（既定値: `low`）。
-- `--tool-output-token-limit N` — モデル履歴に保持するツール出力の上限（既定値: `12000` tokens）。
-- `--lean` — ユーザーの Codex 設定を読み込まず、reasoning summary を無効化します。認証情報は引き続き利用されます。
-- `--max-loops N`、`--codex PATH`、`--model NAME`、`--auto-approve`、`--api-retry-count N`、`--api-retry-interval-sec N`、`--codex-timeout-sec N`。
+- `--no-managed-env` — 子プロセスに `UV_CACHE_DIR`、`TMP`、`TEMP` を設定しません。
+- `--provider {codex,copilot}` — 使用する AI モデルベンダー（既定値: `codex`）。
+- `--executable PATH` — ベンダーの CLI 実行ファイル（既定値: `codex` または `copilot`）。`--codex PATH` は Codex 用の非推奨エイリアスとして引き続き利用できます。
+- `--reasoning-effort LEVEL` — 推論量（既定値: `medium`。指定可能な値: `none`/`minimal`/`low`/`medium`/`high`/`xhigh`/`max`）。対応レベルはプロバイダではなくモデルに依存するため、wiggum はプロバイダ単位での拒否は行わず、非対応の組み合わせは各プロバイダ CLI 自身が検証エラーとして扱います。
+- `--model-verbosity LEVEL` — Codex の出力 verbosity（既定値: `low`。Codex 専用）。
+- `--tool-output-token-limit N` — モデル履歴に保持するツール出力の上限（既定値: `12000` tokens。Codex 専用）。
+- `--lean` — ユーザーの Codex 設定を読み込まず、reasoning summary を無効化します。認証情報は引き続き利用されます（Codex 専用）。
+- `--max-loops N`、`--model NAME`、`--auto-approve`、`--api-retry-count N`、`--api-retry-interval-sec N`、`--codex-timeout-sec N`。
+
+`--provider copilot` を指定する場合、`--auto-approve` は必須です（GitHub Copilot CLI
+には Codex の `workspace-write` サンドボックスに相当する半自動モードがなく、
+`--allow-all-tools` を渡して全ツールを許可する必要があるため）。`--reasoning-effort`
+は両プロバイダで利用できます。対応するレベルはプロバイダではなくモデルに依存するため、
+wiggum は値をプロバイダ単位で拒否せず、そのまま各プロバイダ CLI へ転送します。非対応の
+組み合わせは CLI 側の検証エラーになります。また `--model-verbosity`、
+`--tool-output-token-limit`、`--lean` は Codex 固有のインライン設定であり、
+Copilot 選択時に既定値以外を指定すると検証エラーになります。
 
 各 Codex 試行では JSONL の `turn.completed` イベントから input、cached input、output、
 reasoning output の token 使用量を集計し、タスク累計と実行全体の累計をログに表示します。Codex
 がツール出力を切り詰めたイベントを報告した場合は、その件数と設定上限も警告します。
+GitHub Copilot CLI は Codex と同等の機械可読な token 使用量イベントを公開していないため、
+`--provider copilot` では常に使用量が 0 として記録されます。
 
 すべてのオプションと終了コードは、`uv run wiggum run --help` で確認できます。
 
@@ -111,10 +126,12 @@ uv run -m ruff check .
 
 ## English
 
-wiggum is a reusable Ralph loop runner for the Codex CLI. It selects one
-pending task from a project's `TASKS.md` ledger, runs `codex exec` for exactly
-one Ralph loop, verifies the loop's terminal status, and commits the loop's
-changes, repeating until the ledger is complete or a stopping condition is hit.
+wiggum is a reusable Ralph loop runner that supports both Codex CLI and GitHub
+Copilot CLI. It selects one pending task from a project's `TASKS.md` ledger,
+runs exactly one Ralph loop with the selected AI model vendor's CLI, verifies
+the loop's terminal status, and commits the loop's changes, repeating until
+the ledger is complete or a stopping condition is hit. The default vendor is
+Codex CLI (`codex exec`), the same as explicitly passing `--provider codex`.
 
 wiggum itself does not define your project's specification or tasks; use
 `wiggum init` to scaffold the Ralph loop files into your repository, then edit
@@ -167,25 +184,46 @@ Useful options:
 
 - `--repo PATH` — repository to operate on (default: current directory).
 - `--tasks-file PATH` — task ledger (default: `<repo>/TASKS.md`).
-- `--prompt-file PATH` — prompt passed to Codex for each loop (default:
+- `--prompt-file PATH` — prompt passed to the agent for each loop (default:
   wiggum's bundled Ralph loop prompt).
 - `--logs-dir PATH` / `--temp-dir PATH` / `--uv-cache-dir PATH` — override
   where wiggum writes loop logs, temporary files, and the uv cache.
 - `--no-managed-env` — do not set `UV_CACHE_DIR`, `TMP`, and `TEMP` for the
-  Codex child process.
-- `--reasoning-effort LEVEL` — Codex reasoning effort (default: `medium`).
-- `--model-verbosity LEVEL` — Codex output verbosity (default: `low`).
+  child process.
+- `--provider {codex,copilot}` — AI model vendor to use (default: `codex`).
+- `--executable PATH` — vendor CLI executable (default: `codex` or `copilot`).
+  `--codex PATH` remains available as a deprecated alias for Codex.
+- `--reasoning-effort LEVEL` — reasoning effort (default: `medium`; accepted
+  values: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`). Support for a
+  given level depends on the selected model, not the provider, so wiggum
+  does not reject a level by provider; each provider CLI rejects an
+  unsupported combination itself.
+- `--model-verbosity LEVEL` — Codex output verbosity (default: `low`; Codex
+  only).
 - `--tool-output-token-limit N` — maximum tool-output tokens retained in model
-  history (default: `12000`).
+  history (default: `12000`; Codex only).
 - `--lean` — ignore user Codex configuration and disable reasoning summaries;
-  saved authentication remains available.
-- `--max-loops N`, `--codex PATH`, `--model NAME`, `--auto-approve`,
-  `--api-retry-count N`, `--api-retry-interval-sec N`, `--codex-timeout-sec N`.
+  saved authentication remains available (Codex only).
+- `--max-loops N`, `--model NAME`, `--auto-approve`, `--api-retry-count N`,
+  `--api-retry-interval-sec N`, `--codex-timeout-sec N`.
+
+`--auto-approve` is required when `--provider copilot` is selected, because
+GitHub Copilot CLI has no partially-unattended mode comparable to Codex's
+`workspace-write` sandbox and must be told to allow every tool with
+`--allow-all-tools`. `--reasoning-effort` is supported by both providers.
+Support for a given level depends on the selected model, not the provider,
+so wiggum forwards the value as-is rather than rejecting it by provider; an
+unsupported combination is a validation error from the provider CLI itself.
+`--model-verbosity`, `--tool-output-token-limit`, and `--lean` are
+Codex-only inline configuration; passing a non-default value together with
+`--provider copilot` is a validation error.
 
 For every Codex attempt, wiggum reads the JSONL `turn.completed` event and logs
 input, cached input, output, and reasoning-output token usage together with task
 and run totals. If Codex reports truncated tool-output events, wiggum also logs
-their count and configured limit as a warning.
+their count and configured limit as a warning. GitHub Copilot CLI does not
+expose a machine-readable per-turn usage event comparable to Codex's, so
+`--provider copilot` always reports all-zero usage.
 
 Run `uv run wiggum run --help` for the full option list and exit codes.
 

@@ -9,5 +9,4 @@ DEFAULT_CODEX_TIMEOUT_SEC = 1_800
 DEFAULT_REASONING_EFFORT = "medium"
 DEFAULT_MODEL_VERBOSITY = "low"
 DEFAULT_TOOL_OUTPUT_TOKEN_LIMIT = 12_000
-REASONING_EFFORTS = ("minimal", "low", "medium", "high", "xhigh")
 MODEL_VERBOSITIES = ("low", "medium", "high")

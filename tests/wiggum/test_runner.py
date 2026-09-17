@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pytest
 
+import wiggum.providers.codex as codex_provider_module
+import wiggum.providers.copilot as copilot_provider_module
 import wiggum.runner as runner_module
 from wiggum.exit_codes import ExitCode
 from wiggum.runner import run
@@ -141,7 +143,7 @@ def test_run_rejects_a_missing_required_file_before_starting_dependencies(
     if required_name == "RALPH_PROJECT.md":
         (tmp_path / "TASKS.md").write_text("contents\n", encoding="utf-8")
     monkeypatch.setattr(
-        runner_module,
+        codex_provider_module,
         "resolve_codex_executable",
         lambda value: pytest.fail("Codex must not be resolved"),
     )
@@ -178,7 +180,7 @@ def test_run_uses_the_bundled_default_prompt_when_prompt_path_is_none(
 - Depends on: none
 """,
     )
-    monkeypatch.setattr(runner_module, "resolve_codex_executable", lambda value: value)
+    monkeypatch.setattr(codex_provider_module, "resolve_codex_executable", lambda value: value)
     monkeypatch.setattr(runner_module, "require_git_output", _fake_git_output_factory(tmp_path))
     monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
 
@@ -231,7 +233,7 @@ def test_run_logs_runner_progress_loop_and_selected_task_once(
     def record_info(message: str, *args: object) -> None:
         messages.append(message.format(*args))
 
-    monkeypatch.setattr(runner_module, "resolve_codex_executable", lambda value: value)
+    monkeypatch.setattr(codex_provider_module, "resolve_codex_executable", lambda value: value)
     monkeypatch.setattr(runner_module, "require_git_output", _fake_git_output_factory(tmp_path))
     monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
     monkeypatch.setattr(runner_module.logger, "info", record_info)
@@ -267,11 +269,11 @@ def test_run_does_not_start_codex_when_all_tasks_are_already_complete(
     )
     success_messages: list[str] = []
 
-    monkeypatch.setattr(runner_module, "resolve_codex_executable", lambda value: value)
+    monkeypatch.setattr(codex_provider_module, "resolve_codex_executable", lambda value: value)
     monkeypatch.setattr(runner_module, "require_git_output", _fake_git_output_factory(tmp_path))
     monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
     monkeypatch.setattr(
-        runner_module,
+        codex_provider_module,
         "run_codex",
         lambda *args, **kwargs: pytest.fail("Codex must not be started"),
     )
@@ -312,11 +314,11 @@ def test_run_does_not_start_codex_when_no_incomplete_task_is_eligible(
     )
     warning_messages: list[str] = []
 
-    monkeypatch.setattr(runner_module, "resolve_codex_executable", lambda value: value)
+    monkeypatch.setattr(codex_provider_module, "resolve_codex_executable", lambda value: value)
     monkeypatch.setattr(runner_module, "require_git_output", _fake_git_output_factory(tmp_path))
     monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
     monkeypatch.setattr(
-        runner_module,
+        codex_provider_module,
         "run_codex",
         lambda *args, **kwargs: pytest.fail("Codex must not be started"),
     )
@@ -402,7 +404,7 @@ def test_run_completes_the_last_task_and_writes_one_log(
         )
         return subprocess.CompletedProcess(command, 0)
 
-    monkeypatch.setattr(runner_module, "resolve_codex_executable", lambda value: value)
+    monkeypatch.setattr(codex_provider_module, "resolve_codex_executable", lambda value: value)
     monkeypatch.setattr(runner_module, "require_git_output", fake_git_output)
     monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
     monkeypatch.setattr(
@@ -410,7 +412,7 @@ def test_run_completes_the_last_task_and_writes_one_log(
         "build_codex_environment",
         lambda *args, **kwargs: {},
     )
-    monkeypatch.setattr(runner_module, "run_codex", fake_run_codex)
+    monkeypatch.setattr(codex_provider_module, "run_codex", fake_run_codex)
     monkeypatch.setattr(runner_module, "commit_loop_changes", fake_commit_loop_changes)
     monkeypatch.setattr(
         runner_module,
@@ -482,7 +484,7 @@ def test_run_reports_codex_failure_when_the_process_exits_nonzero(
         log_path.write_text("boom\n", encoding="utf-8")
         return subprocess.CompletedProcess(command, 1)
 
-    monkeypatch.setattr(runner_module, "resolve_codex_executable", lambda value: value)
+    monkeypatch.setattr(codex_provider_module, "resolve_codex_executable", lambda value: value)
     monkeypatch.setattr(runner_module, "require_git_output", _fake_git_output_factory(tmp_path))
     monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
     monkeypatch.setattr(
@@ -490,7 +492,7 @@ def test_run_reports_codex_failure_when_the_process_exits_nonzero(
         "build_codex_environment",
         lambda *args, **kwargs: {},
     )
-    monkeypatch.setattr(runner_module, "run_codex", fake_run_codex)
+    monkeypatch.setattr(codex_provider_module, "run_codex", fake_run_codex)
 
     result = run(repo=tmp_path, prompt_path=prompt_path, max_loops=1, api_retry_count=0)
 
@@ -531,7 +533,7 @@ def test_run_reports_protocol_error_for_an_invalid_terminal_token(
         log_path.write_text("codex output\n", encoding="utf-8")
         return subprocess.CompletedProcess(command, 0)
 
-    monkeypatch.setattr(runner_module, "resolve_codex_executable", lambda value: value)
+    monkeypatch.setattr(codex_provider_module, "resolve_codex_executable", lambda value: value)
     monkeypatch.setattr(runner_module, "require_git_output", _fake_git_output_factory(tmp_path))
     monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
     monkeypatch.setattr(
@@ -539,7 +541,7 @@ def test_run_reports_protocol_error_for_an_invalid_terminal_token(
         "build_codex_environment",
         lambda *args, **kwargs: {},
     )
-    monkeypatch.setattr(runner_module, "run_codex", fake_run_codex)
+    monkeypatch.setattr(codex_provider_module, "run_codex", fake_run_codex)
 
     result = run(repo=tmp_path, prompt_path=prompt_path, max_loops=1, api_retry_count=0)
 
@@ -582,7 +584,7 @@ def test_run_does_not_retry_a_non_transient_codex_failure(
         log_path.write_text("invalid local configuration\n", encoding="utf-8")
         return subprocess.CompletedProcess(command, 1)
 
-    monkeypatch.setattr(runner_module, "resolve_codex_executable", lambda value: value)
+    monkeypatch.setattr(codex_provider_module, "resolve_codex_executable", lambda value: value)
     monkeypatch.setattr(runner_module, "require_git_output", _fake_git_output_factory(tmp_path))
     monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
     monkeypatch.setattr(
@@ -590,7 +592,7 @@ def test_run_does_not_retry_a_non_transient_codex_failure(
         "build_codex_environment",
         lambda *args, **kwargs: {},
     )
-    monkeypatch.setattr(runner_module, "run_codex", fake_run_codex)
+    monkeypatch.setattr(codex_provider_module, "run_codex", fake_run_codex)
 
     result = run(repo=tmp_path, prompt_path=prompt_path, max_loops=1, api_retry_count=1)
 
@@ -631,7 +633,7 @@ def test_run_does_not_retry_a_transient_codex_failure_by_default(
         log_path.write_text("stream disconnected", encoding="utf-8")
         return subprocess.CompletedProcess(command, 1)
 
-    monkeypatch.setattr(runner_module, "resolve_codex_executable", lambda value: value)
+    monkeypatch.setattr(codex_provider_module, "resolve_codex_executable", lambda value: value)
     monkeypatch.setattr(runner_module, "require_git_output", _fake_git_output_factory(tmp_path))
     monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
     monkeypatch.setattr(
@@ -639,7 +641,7 @@ def test_run_does_not_retry_a_transient_codex_failure_by_default(
         "build_codex_environment",
         lambda *args, **kwargs: {},
     )
-    monkeypatch.setattr(runner_module, "run_codex", fake_run_codex)
+    monkeypatch.setattr(codex_provider_module, "run_codex", fake_run_codex)
 
     result = run(repo=tmp_path, prompt_path=prompt_path, max_loops=1)
 
@@ -687,7 +689,7 @@ def test_run_allows_incomplete_task_without_changes_or_commit(
         log_path.write_text("agent could not continue\n", encoding="utf-8")
         return subprocess.CompletedProcess(command, 0)
 
-    monkeypatch.setattr(runner_module, "resolve_codex_executable", lambda value: value)
+    monkeypatch.setattr(codex_provider_module, "resolve_codex_executable", lambda value: value)
     monkeypatch.setattr(runner_module, "require_git_output", fake_git_output)
     monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
     monkeypatch.setattr(runner_module, "has_worktree_changes", lambda repo: False)
@@ -696,7 +698,7 @@ def test_run_allows_incomplete_task_without_changes_or_commit(
         "build_codex_environment",
         lambda *args, **kwargs: {},
     )
-    monkeypatch.setattr(runner_module, "run_codex", fake_run_codex)
+    monkeypatch.setattr(codex_provider_module, "run_codex", fake_run_codex)
     monkeypatch.setattr(
         runner_module,
         "commit_loop_changes",
@@ -710,3 +712,256 @@ def test_run_allows_incomplete_task_without_changes_or_commit(
     log_names = [path.name for path in (tmp_path / "logs").iterdir()]
     assert len(log_names) == 1
     assert log_names[0].endswith("_010_incompleted.log")
+
+
+def test_run_rejects_copilot_without_auto_approve(tmp_path: Path) -> None:
+    """Reject a Copilot run before touching Git when auto-approve is missing."""
+    result = run(repo=tmp_path, provider="copilot")
+
+    assert result == ExitCode.PREFLIGHT_ERROR
+
+
+def test_run_rejects_codex_only_options_for_copilot(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Reject a Codex-only model-verbosity override for the copilot provider."""
+    messages: list[str] = []
+    monkeypatch.setattr(
+        runner_module.logger,
+        "error",
+        lambda entry, *args: messages.append(entry.format(*args)),
+    )
+
+    result = run(
+        repo=tmp_path,
+        provider="copilot",
+        auto_approve=True,
+        model_verbosity="high",
+    )
+
+    assert result == ExitCode.PREFLIGHT_ERROR
+    assert any("--provider copilot does not support: --model-verbosity" in m for m in messages)
+
+
+def test_run_accepts_model_specific_reasoning_effort_for_codex(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Forward a model-specific reasoning effort to Codex in a dry run.
+
+    Support for a given level depends on the selected model, not the
+    provider, so ``--reasoning-effort none`` must reach the Codex command for
+    models that support it.
+    """
+    monkeypatch.setattr(codex_provider_module, "resolve_codex_executable", lambda value: value)
+    monkeypatch.setattr(runner_module, "require_git_output", _fake_git_output_factory(tmp_path))
+    monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
+    prompt_path = tmp_path / "prompt.md"
+    prompt_path.write_text("one loop", encoding="utf-8")
+    _write_tasks(
+        tmp_path / "TASKS.md",
+        """## TASK-001: pending task
+
+- Status: pending
+- Priority: 1
+- Depends on: none
+""",
+    )
+
+    result = run(repo=tmp_path, prompt_path=prompt_path, reasoning_effort="none", dry_run=True)
+
+    assert result == ExitCode.SUCCESS
+    assert 'model_reasoning_effort=\\"none\\"' in capsys.readouterr().out
+
+
+def test_run_dry_run_prints_a_copilot_command_and_prompt(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Print the Copilot command and prompt without invoking any process."""
+    prompt_path = tmp_path / "prompt.md"
+    prompt_path.write_text("one loop", encoding="utf-8")
+    _write_tasks(
+        tmp_path / "TASKS.md",
+        """## TASK-013: dry run task
+
+- Status: pending
+- Priority: 1
+- Depends on: none
+""",
+    )
+    monkeypatch.setattr(copilot_provider_module, "resolve_copilot_executable", lambda value: value)
+    monkeypatch.setattr(
+        runner_module,
+        "require_git_output",
+        _fake_git_output_factory(tmp_path),
+    )
+    monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
+
+    result = run(
+        repo=tmp_path,
+        prompt_path=prompt_path,
+        provider="copilot",
+        auto_approve=True,
+        dry_run=True,
+    )
+
+    assert result == ExitCode.SUCCESS
+    printed = capsys.readouterr().out
+    assert (
+        "copilot -s --no-ask-user --output-format text --reasoning-effort medium "
+        "--allow-all-tools" in printed
+    )
+    assert "one loop" in printed
+
+
+def test_run_completes_a_task_with_the_copilot_provider(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Complete a task through the copilot provider using its own process hooks."""
+    prompt_path = tmp_path / "prompt.md"
+    prompt_path.write_text("one loop", encoding="utf-8")
+    tasks_path = tmp_path / "TASKS.md"
+    _write_tasks(
+        tasks_path,
+        """## TASK-011: copilot task
+
+- Status: pending
+- Priority: 1
+- Depends on: none
+""",
+    )
+    commit_created = False
+    copilot_calls = 0
+
+    def fake_git_output(repo: Path, *args: str) -> str:
+        if args == ("rev-parse", "--show-toplevel"):
+            return str(repo)
+        if args == ("rev-parse", "HEAD"):
+            return "after" if commit_created else "before"
+        raise AssertionError(args)
+
+    def fake_commit_loop_changes(repo: Path, task_id: str, status: str) -> None:
+        nonlocal commit_created
+        assert repo == tmp_path
+        assert task_id == "TASK-011"
+        assert status == "completed"
+        commit_created = True
+
+    def fake_run_copilot(
+        command: list[str],
+        repo: Path,
+        log_path: Path,
+        environment: dict[str, str],
+        prompt: str,
+        output_path: Path,
+        timeout_sec: int,
+    ) -> subprocess.CompletedProcess[str]:
+        nonlocal copilot_calls
+        del environment, prompt, timeout_sec
+        copilot_calls += 1
+        assert repo == tmp_path
+        assert "--allow-all-tools" in command
+        output_path.write_text("TASK_COMPLETED: TASK-011\n", encoding="utf-8")
+        log_path.write_text("Copilot completed the task\n", encoding="utf-8")
+        tasks_path.write_text(
+            tasks_path.read_text(encoding="utf-8").replace(
+                "- Status: pending",
+                "- Status: completed",
+            ),
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(copilot_provider_module, "resolve_copilot_executable", lambda value: value)
+    monkeypatch.setattr(runner_module, "require_git_output", fake_git_output)
+    monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
+    monkeypatch.setattr(
+        runner_module,
+        "build_codex_environment",
+        lambda *args, **kwargs: {},
+    )
+    monkeypatch.setattr(copilot_provider_module, "run_copilot", fake_run_copilot)
+    monkeypatch.setattr(runner_module, "commit_loop_changes", fake_commit_loop_changes)
+    monkeypatch.setattr(
+        runner_module,
+        "commit_count",
+        lambda repo, before, after: int(before != after),
+    )
+
+    result = run(
+        repo=tmp_path,
+        prompt_path=prompt_path,
+        provider="copilot",
+        auto_approve=True,
+        max_loops=1,
+    )
+
+    assert result == ExitCode.SUCCESS
+    assert copilot_calls == 1
+    log_names = [path.name for path in (tmp_path / "logs").iterdir()]
+    assert len(log_names) == 1
+    assert log_names[0].endswith("_011_completed.log")
+
+
+def test_run_reports_copilot_failure_when_the_process_exits_nonzero(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Stop with an agent failure exit code when Copilot exits non-zero."""
+    prompt_path = tmp_path / "prompt.md"
+    prompt_path.write_text("one loop", encoding="utf-8")
+    _write_tasks(
+        tmp_path / "TASKS.md",
+        """## TASK-012: copilot task
+
+- Status: pending
+- Priority: 1
+- Depends on: none
+""",
+    )
+
+    def fake_run_copilot(
+        command: list[str],
+        repo: Path,
+        log_path: Path,
+        environment: dict[str, str],
+        prompt: str,
+        output_path: Path,
+        timeout_sec: int,
+    ) -> subprocess.CompletedProcess[str]:
+        del repo, environment, prompt, output_path, timeout_sec
+        log_path.write_text("fatal error\n", encoding="utf-8")
+        return subprocess.CompletedProcess(command, 1)
+
+    monkeypatch.setattr(copilot_provider_module, "resolve_copilot_executable", lambda value: value)
+    monkeypatch.setattr(
+        runner_module,
+        "require_git_output",
+        _fake_git_output_factory(tmp_path),
+    )
+    monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
+    monkeypatch.setattr(
+        runner_module,
+        "build_codex_environment",
+        lambda *args, **kwargs: {},
+    )
+    monkeypatch.setattr(copilot_provider_module, "run_copilot", fake_run_copilot)
+
+    result = run(
+        repo=tmp_path,
+        prompt_path=prompt_path,
+        provider="copilot",
+        auto_approve=True,
+        max_loops=1,
+        api_retry_count=None,
+    )
+
+    assert result == ExitCode.CODEX_FAILURE
+    log_names = [path.name for path in (tmp_path / "logs").iterdir()]
+    assert len(log_names) == 1
+    assert log_names[0].endswith("_012_copilot-failure.log")

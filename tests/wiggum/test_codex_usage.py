@@ -4,15 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from wiggum.codex_usage import TokenUsage, read_codex_usage
-
-
-def test_token_usage_adds_counts_without_double_counting_reasoning() -> None:
-    """Combine usage records and count reasoning as part of output tokens."""
-    combined = TokenUsage(100, 80, 20, 5) + TokenUsage(50, 40, 10, 3)
-
-    assert combined == TokenUsage(150, 120, 30, 8)
-    assert combined.total_tokens == 180
+from wiggum.codex_usage import read_codex_usage
+from wiggum.token_usage import TokenUsage
 
 
 def test_read_codex_usage_sums_completed_turns_and_ignores_other_lines(
