@@ -79,11 +79,14 @@ def test_parse_args_run_accepts_token_saving_controls() -> None:
     assert args.lean is True
 
 
-def test_parse_args_run_accepts_a_copilot_only_reasoning_effort() -> None:
-    """Parse --reasoning-effort max, a level only GitHub Copilot CLI supports."""
-    args = _parse_args(["run", "--reasoning-effort", "max"])
+@pytest.mark.parametrize("reasoning_effort", ("none", "max"))
+def test_parse_args_run_accepts_model_specific_reasoning_efforts(
+    reasoning_effort: str,
+) -> None:
+    """Parse reasoning-effort values whose support depends on the model."""
+    args = _parse_args(["run", "--reasoning-effort", reasoning_effort])
 
-    assert args.reasoning_effort == "max"
+    assert args.reasoning_effort == reasoning_effort
 
 
 def test_parse_args_init_defaults_to_the_current_directory() -> None:

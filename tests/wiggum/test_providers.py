@@ -41,7 +41,15 @@ def test_reasoning_efforts_are_not_gated_per_provider() -> None:
     Support for a given level depends on the selected model, not the
     provider, so wiggum does not reject a level based on provider alone.
     """
-    assert REASONING_EFFORTS == ("minimal", "low", "medium", "high", "xhigh", "max")
+    assert REASONING_EFFORTS == (
+        "none",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+    )
 
 
 def test_validate_provider_options_allows_any_codex_configuration() -> None:

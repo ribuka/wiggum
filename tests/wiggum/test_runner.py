@@ -744,16 +744,16 @@ def test_run_rejects_codex_only_options_for_copilot(
     assert any("--provider copilot does not support: --model-verbosity" in m for m in messages)
 
 
-def test_run_accepts_a_copilot_only_reasoning_effort_for_codex(
+def test_run_accepts_model_specific_reasoning_effort_for_codex(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Do not reject reasoning-effort levels by provider in a dry run.
+    """Forward a model-specific reasoning effort to Codex in a dry run.
 
     Support for a given level depends on the selected model, not the
-    provider, so ``--reasoning-effort max`` must reach the Codex command even
-    though Codex CLI itself has no ``minimal``-style provider gate in wiggum.
+    provider, so ``--reasoning-effort none`` must reach the Codex command for
+    models that support it.
     """
     monkeypatch.setattr(codex_provider_module, "resolve_codex_executable", lambda value: value)
     monkeypatch.setattr(runner_module, "require_git_output", _fake_git_output_factory(tmp_path))
@@ -770,10 +770,10 @@ def test_run_accepts_a_copilot_only_reasoning_effort_for_codex(
 """,
     )
 
-    result = run(repo=tmp_path, prompt_path=prompt_path, reasoning_effort="max", dry_run=True)
+    result = run(repo=tmp_path, prompt_path=prompt_path, reasoning_effort="none", dry_run=True)
 
     assert result == ExitCode.SUCCESS
-    assert 'model_reasoning_effort=\\"max\\"' in capsys.readouterr().out
+    assert 'model_reasoning_effort=\\"none\\"' in capsys.readouterr().out
 
 
 def test_run_dry_run_prints_a_copilot_command_and_prompt(

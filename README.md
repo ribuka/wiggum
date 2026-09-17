@@ -63,7 +63,7 @@ uv run wiggum run
 - `--no-managed-env` — 子プロセスに `UV_CACHE_DIR`、`TMP`、`TEMP` を設定しません。
 - `--provider {codex,copilot}` — 使用する AI モデルベンダー（既定値: `codex`）。
 - `--executable PATH` — ベンダーの CLI 実行ファイル（既定値: `codex` または `copilot`）。`--codex PATH` は Codex 用の非推奨エイリアスとして引き続き利用できます。
-- `--reasoning-effort LEVEL` — 推論量（既定値: `medium`。指定可能な値: `minimal`/`low`/`medium`/`high`/`xhigh`/`max`）。対応レベルはプロバイダではなくモデルに依存するため、wiggum はプロバイダ単位での拒否は行わず、非対応の組み合わせは各プロバイダ CLI 自身が検証エラーとして扱います。
+- `--reasoning-effort LEVEL` — 推論量（既定値: `medium`。指定可能な値: `none`/`minimal`/`low`/`medium`/`high`/`xhigh`/`max`）。対応レベルはプロバイダではなくモデルに依存するため、wiggum はプロバイダ単位での拒否は行わず、非対応の組み合わせは各プロバイダ CLI 自身が検証エラーとして扱います。
 - `--model-verbosity LEVEL` — Codex の出力 verbosity（既定値: `low`。Codex 専用）。
 - `--tool-output-token-limit N` — モデル履歴に保持するツール出力の上限（既定値: `12000` tokens。Codex 専用）。
 - `--lean` — ユーザーの Codex 設定を読み込まず、reasoning summary を無効化します。認証情報は引き続き利用されます（Codex 専用）。
@@ -194,7 +194,7 @@ Useful options:
 - `--executable PATH` — vendor CLI executable (default: `codex` or `copilot`).
   `--codex PATH` remains available as a deprecated alias for Codex.
 - `--reasoning-effort LEVEL` — reasoning effort (default: `medium`; accepted
-  values: `minimal`, `low`, `medium`, `high`, `xhigh`, `max`). Support for a
+  values: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`). Support for a
   given level depends on the selected model, not the provider, so wiggum
   does not reject a level by provider; each provider CLI rejects an
   unsupported combination itself.
