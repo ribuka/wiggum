@@ -10,9 +10,10 @@ from __future__ import annotations
 
 CODEX = "codex"
 COPILOT = "copilot"
-PROVIDERS = (CODEX, COPILOT)
+CLAUDE = "claude"
+PROVIDERS = (CODEX, COPILOT, CLAUDE)
 DEFAULT_PROVIDER = CODEX
-DEFAULT_EXECUTABLES = {CODEX: "codex", COPILOT: "copilot"}
+DEFAULT_EXECUTABLES = {CODEX: "codex", COPILOT: "copilot", CLAUDE: "claude"}
 
 # Union of every reasoning-effort level known to either provider CLI. Actual
 # support for a given level ultimately depends on the selected model, so this

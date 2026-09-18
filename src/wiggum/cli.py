@@ -92,8 +92,8 @@ def _add_run_arguments(parser: argparse.ArgumentParser) -> None:
         "--executable",
         default=None,
         help=(
-            "provider CLI executable name or path; defaults to codex or copilot "
-            "depending on --provider"
+            "provider CLI executable name or path; defaults to codex, copilot, "
+            "or claude depending on --provider"
         ),
     )
     parser.add_argument(
@@ -107,9 +107,11 @@ def _add_run_arguments(parser: argparse.ArgumentParser) -> None:
         choices=REASONING_EFFORTS,
         default=DEFAULT_REASONING_EFFORT,
         help=(
-            "reasoning effort; defaults to medium. Support for a given "
-            "level depends on the selected model, not the provider; an "
-            "unsupported combination is rejected by the provider CLI"
+            "reasoning effort; defaults to medium. For codex and copilot, "
+            "support for a given level depends on the selected model, not "
+            "the provider; an unsupported combination is rejected by the "
+            "provider CLI. Not supported by the claude provider, which "
+            "requires the default value"
         ),
     )
     parser.add_argument(
@@ -140,8 +142,8 @@ def _add_run_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help=(
             "automatically approve requests in the workspace-write sandbox "
-            "(codex), or allow all tools (copilot); required for the copilot "
-            "provider"
+            "(codex), allow all tools (copilot), or bypass permission "
+            "prompts (claude); required for the copilot and claude providers"
         ),
     )
     parser.add_argument(
