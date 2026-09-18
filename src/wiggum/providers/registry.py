@@ -4,14 +4,16 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from wiggum.providers.claude import adapter as claude_adapter
 from wiggum.providers.codex import adapter as codex_adapter
-from wiggum.providers.constants import CODEX, COPILOT, PROVIDERS
+from wiggum.providers.constants import CLAUDE, CODEX, COPILOT, PROVIDERS
 from wiggum.providers.contract import ProviderAdapter
 from wiggum.providers.copilot import adapter as copilot_adapter
 
 _ADAPTER_FACTORIES: dict[str, Callable[[], ProviderAdapter]] = {
     CODEX: codex_adapter,
     COPILOT: copilot_adapter,
+    CLAUDE: claude_adapter,
 }
 
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from wiggum.providers import (
+    CLAUDE,
     CODEX,
     COPILOT,
     DEFAULT_EXECUTABLES,
@@ -20,6 +21,7 @@ def test_get_adapter_returns_the_matching_provider_name() -> None:
     """Return an adapter whose name matches the requested provider."""
     assert get_adapter(CODEX).name == CODEX
     assert get_adapter(COPILOT).name == COPILOT
+    assert get_adapter(CLAUDE).name == CLAUDE
 
 
 def test_get_adapter_rejects_an_unsupported_provider_name() -> None:
@@ -31,8 +33,12 @@ def test_get_adapter_rejects_an_unsupported_provider_name() -> None:
 def test_default_provider_is_codex() -> None:
     """Default to Codex so existing behavior remains unchanged."""
     assert DEFAULT_PROVIDER == "codex"
-    assert PROVIDERS == ("codex", "copilot")
-    assert DEFAULT_EXECUTABLES == {"codex": "codex", "copilot": "copilot"}
+    assert PROVIDERS == ("codex", "copilot", "claude")
+    assert DEFAULT_EXECUTABLES == {
+        "codex": "codex",
+        "copilot": "copilot",
+        "claude": "claude",
+    }
 
 
 def test_reasoning_efforts_are_not_gated_per_provider() -> None:
@@ -145,6 +151,100 @@ def test_validate_provider_options_rejects_codex_only_options_for_copilot(
 
     error = validate_provider_options(
         "copilot",
+        auto_approve=True,
+        **defaults,
+    )
+
+    assert error is not None
+    assert expected_option in error
+
+
+def test_validate_provider_options_allows_claude_defaults_with_auto_approve() -> None:
+    """Claude accepts default Codex-only options and reasoning effort when set."""
+    error = validate_provider_options(
+        "claude",
+        reasoning_effort="medium",
+        model_verbosity="low",
+        tool_output_token_limit=12_000,
+        lean=False,
+        auto_approve=True,
+    )
+
+    assert error is None
+
+
+@pytest.mark.parametrize("reasoning_effort", ["low", "medium", "high", "xhigh", "max"])
+def test_validate_provider_options_allows_every_claude_supported_reasoning_effort(
+    reasoning_effort: str,
+) -> None:
+    """Forward every reasoning effort Claude Code CLI's --effort flag accepts."""
+    error = validate_provider_options(
+        "claude",
+        reasoning_effort=reasoning_effort,
+        model_verbosity="low",
+        tool_output_token_limit=12_000,
+        lean=False,
+        auto_approve=True,
+    )
+
+    assert error is None
+
+
+def test_validate_provider_options_requires_auto_approve_for_claude() -> None:
+    """Reject Claude runs without auto-approve because loops cannot pause."""
+    error = validate_provider_options(
+        "claude",
+        reasoning_effort="medium",
+        model_verbosity="low",
+        tool_output_token_limit=12_000,
+        lean=False,
+        auto_approve=False,
+    )
+
+    assert error == "--provider claude requires --auto-approve"
+
+
+@pytest.mark.parametrize("reasoning_effort", ["none", "minimal"])
+def test_validate_provider_options_rejects_reasoning_efforts_claude_does_not_accept(
+    reasoning_effort: str,
+) -> None:
+    """Reject reasoning-effort values outside Claude Code CLI's --effort choices."""
+    error = validate_provider_options(
+        "claude",
+        reasoning_effort=reasoning_effort,
+        model_verbosity="low",
+        tool_output_token_limit=12_000,
+        lean=False,
+        auto_approve=True,
+    )
+
+    assert error is not None
+    assert "--reasoning-effort" in error
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "expected_option"),
+    [
+        ({"model_verbosity": "high"}, "--model-verbosity"),
+        ({"tool_output_token_limit": 1}, "--tool-output-token-limit"),
+        ({"lean": True}, "--lean"),
+    ],
+)
+def test_validate_provider_options_rejects_codex_only_options_for_claude(
+    kwargs: dict[str, object],
+    expected_option: str,
+) -> None:
+    """Reject Codex-only inline configuration options for the claude provider."""
+    defaults = {
+        "reasoning_effort": "medium",
+        "model_verbosity": "low",
+        "tool_output_token_limit": 12_000,
+        "lean": False,
+    }
+    defaults.update(kwargs)
+
+    error = validate_provider_options(
+        "claude",
         auto_approve=True,
         **defaults,
     )

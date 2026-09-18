@@ -158,22 +158,29 @@ def _run(
     model : str | None
         Optional model override.
     reasoning_effort : str
-        Reasoning effort for each loop. Support for a given level depends on
-        the selected model, not the provider; the provider CLI rejects an
-        unsupported combination itself.
+        Reasoning effort for each loop. For the ``codex`` and ``copilot``
+        providers, support for a given level depends on the selected model,
+        not the provider; the provider CLI rejects an unsupported
+        combination itself. Claude Code CLI's ``--effort`` flag accepts a
+        fixed, provider-level set of values
+        (:data:`wiggum.providers.constants.CLAUDE_REASONING_EFFORTS`)
+        regardless of model; a value outside that set is rejected for the
+        ``claude`` provider.
     model_verbosity : str
         Codex model verbosity for each loop. Codex-only; must be left at its
-        default value for the ``copilot`` provider.
+        default value for the ``copilot`` and ``claude`` providers.
     tool_output_token_limit : int
         Maximum tokens retained from one tool output in model history.
         Codex-only; must be left at its default value for the ``copilot``
-        provider.
+        and ``claude`` providers.
     lean : bool
         Whether to ignore user Codex configuration and reasoning summaries.
-        Codex-only; must be ``False`` for the ``copilot`` provider.
+        Codex-only; must be ``False`` for the ``copilot`` and ``claude``
+        providers.
     auto_approve : bool
         Automatically approve agent requests instead of requiring
-        interactive confirmation. Required for the ``copilot`` provider.
+        interactive confirmation. Required for the ``copilot`` and ``claude``
+        providers.
     dry_run : bool
         Validate inputs and print the command without invoking the agent.
     api_retry_count : int | None
@@ -566,22 +573,29 @@ def run(
     model : str | None, default None
         Optional model override.
     reasoning_effort : str, default "medium"
-        Reasoning effort for each loop. Support for a given level depends on
-        the selected model, not the provider; the provider CLI rejects an
-        unsupported combination itself.
+        Reasoning effort for each loop. For the ``codex`` and ``copilot``
+        providers, support for a given level depends on the selected model,
+        not the provider; the provider CLI rejects an unsupported
+        combination itself. Claude Code CLI's ``--effort`` flag accepts a
+        fixed, provider-level set of values
+        (:data:`wiggum.providers.constants.CLAUDE_REASONING_EFFORTS`)
+        regardless of model; a value outside that set is rejected for the
+        ``claude`` provider.
     model_verbosity : str, default "low"
         Codex model verbosity for each loop. Codex-only; must be left at its
-        default value for the ``copilot`` provider.
+        default value for the ``copilot`` and ``claude`` providers.
     tool_output_token_limit : int, default 12000
         Maximum tokens retained from one tool output in model history.
         Codex-only; must be left at its default value for the ``copilot``
-        provider.
+        and ``claude`` providers.
     lean : bool, default False
         Whether to ignore user Codex configuration and reasoning summaries.
-        Codex-only; must be ``False`` for the ``copilot`` provider.
+        Codex-only; must be ``False`` for the ``copilot`` and ``claude``
+        providers.
     auto_approve : bool, default False
         Automatically approve agent requests instead of requiring
-        interactive confirmation. Required for the ``copilot`` provider.
+        interactive confirmation. Required for the ``copilot`` and ``claude``
+        providers.
     dry_run : bool, default False
         Validate inputs and print the command without invoking the agent.
     api_retry_count : int | None, default None
@@ -607,8 +621,8 @@ def run(
         Selected AI model vendor; one of :data:`wiggum.providers.PROVIDERS`.
     executable : str | None, default None
         Provider CLI executable name or path. Defaults to ``codex_executable``
-        for the ``codex`` provider, or ``"copilot"`` for the ``copilot``
-        provider.
+        for the ``codex`` provider, or to that provider's entry in
+        :data:`wiggum.providers.DEFAULT_EXECUTABLES` otherwise.
 
     Returns
     -------

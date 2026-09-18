@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+import wiggum.providers.claude as claude_provider_module
 import wiggum.providers.codex as codex_provider_module
 import wiggum.runner as runner_module
 from wiggum.exit_codes import ExitCode
@@ -144,6 +145,39 @@ def test_run_reports_invalid_utf8_as_preflight_error(
     _configure_dry_run(monkeypatch, tmp_path)
 
     assert run(repo=tmp_path, dry_run=True) == ExitCode.PREFLIGHT_ERROR
+
+
+def test_run_dry_run_builds_a_claude_command(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Print a Claude Code command for --provider claude in a dry run."""
+    _write_tasks(tmp_path / "TASKS.json", [_task("TASK-001")])
+    monkeypatch.setattr(
+        claude_provider_module,
+        "resolve_claude_executable",
+        lambda value: value,
+    )
+    monkeypatch.setattr(
+        runner_module,
+        "require_git_output",
+        lambda target, *args: str(tmp_path) if args == ("rev-parse", "--show-toplevel") else "before",
+    )
+    monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
+
+    result = run(
+        repo=tmp_path,
+        provider="claude",
+        auto_approve=True,
+        dry_run=True,
+    )
+
+    assert result == ExitCode.SUCCESS
+    output = capsys.readouterr().out
+    assert "claude" in output
+    assert "--permission-mode" in output
+    assert "bypassPermissions" in output
 
 
 def test_prompt_formats_contract_as_json() -> None:

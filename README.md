@@ -2,8 +2,8 @@
 
 ## 日本語
 
-wiggum は Codex CLI と GitHub Copilot CLI の両方に対応した、再利用できる Ralph
-ループランナーです。プロジェクトの `TASKS.json` 台帳から未完了のタスクを 1 件選び、
+wiggum は Codex CLI、GitHub Copilot CLI、Claude Code CLI に対応した、再利用できる
+Ralph ループランナーです。プロジェクトの `TASKS.json` 台帳から未完了のタスクを 1 件選び、
 選択した AI モデルベンダーの CLI で Ralph ループ 1 回分だけを実行し、ループの終了
 ステータスを検証して変更をコミットします。台帳が完了するか、停止条件に達するまで
 これを繰り返します。既定のベンダーは Codex CLI (`codex exec`) で、`--provider codex`
@@ -61,28 +61,37 @@ uv run wiggum run
 - `--prompt-file PATH` — 各ループでエージェントに渡すプロンプト（既定値: wiggum 同梱の Ralph ループプロンプト）。
 - `--logs-dir PATH` / `--temp-dir PATH` / `--uv-cache-dir PATH` — ループログ、一時ファイル、uv キャッシュの出力先を上書きします。
 - `--no-managed-env` — 子プロセスに `UV_CACHE_DIR`、`TMP`、`TEMP` を設定しません。
-- `--provider {codex,copilot}` — 使用する AI モデルベンダー（既定値: `codex`）。
-- `--executable PATH` — ベンダーの CLI 実行ファイル（既定値: `codex` または `copilot`）。`--codex PATH` は Codex 用の非推奨エイリアスとして引き続き利用できます。
-- `--reasoning-effort LEVEL` — 推論量（既定値: `medium`。指定可能な値: `none`/`minimal`/`low`/`medium`/`high`/`xhigh`/`max`）。対応レベルはプロバイダではなくモデルに依存するため、wiggum はプロバイダ単位での拒否は行わず、非対応の組み合わせは各プロバイダ CLI 自身が検証エラーとして扱います。
+- `--provider {codex,copilot,claude}` — 使用する AI モデルベンダー（既定値: `codex`）。
+- `--executable PATH` — ベンダーの CLI 実行ファイル（既定値: `codex`、`copilot`、または `claude`）。`--codex PATH` は Codex 用の非推奨エイリアスとして引き続き利用できます。
+- `--reasoning-effort LEVEL` — 推論量（既定値: `medium`。指定可能な値: `none`/`minimal`/`low`/`medium`/`high`/`xhigh`/`max`）。Codex と Copilot では対応レベルがプロバイダではなくモデルに依存するため、wiggum はプロバイダ単位での拒否は行わず、非対応の組み合わせは各プロバイダ CLI 自身が検証エラーとして扱います。Claude Code CLI の `--effort` フラグはモデルによらず `low`/`medium`/`high`/`xhigh`/`max` のみ受け付けるため、`claude` プロバイダで `none`/`minimal` を指定すると検証エラーになります。
 - `--model-verbosity LEVEL` — Codex の出力 verbosity（既定値: `low`。Codex 専用）。
 - `--tool-output-token-limit N` — モデル履歴に保持するツール出力の上限（既定値: `12000` tokens。Codex 専用）。
 - `--lean` — ユーザーの Codex 設定を読み込まず、reasoning summary を無効化します。認証情報は引き続き利用されます（Codex 専用）。
 - `--max-loops N`、`--model NAME`、`--auto-approve`、`--api-retry-count N`、`--api-retry-interval-sec N`、`--codex-timeout-sec N`。
 
-`--provider copilot` を指定する場合、`--auto-approve` は必須です（GitHub Copilot CLI
-には Codex の `workspace-write` サンドボックスに相当する半自動モードがなく、
-`--allow-all-tools` を渡して全ツールを許可する必要があるため）。`--reasoning-effort`
-は両プロバイダで利用できます。対応するレベルはプロバイダではなくモデルに依存するため、
-wiggum は値をプロバイダ単位で拒否せず、そのまま各プロバイダ CLI へ転送します。非対応の
-組み合わせは CLI 側の検証エラーになります。また `--model-verbosity`、
-`--tool-output-token-limit`、`--lean` は Codex 固有のインライン設定であり、
-Copilot 選択時に既定値以外を指定すると検証エラーになります。
+`--provider copilot` または `--provider claude` を指定する場合、`--auto-approve` は
+必須です。GitHub Copilot CLI には Codex の `workspace-write` サンドボックスに相当する
+半自動モードがなく `--allow-all-tools` を渡して全ツールを許可する必要があり、
+Claude Code CLI も同様に非対話モードでは承認プロンプトに応答できないため
+`--permission-mode bypassPermissions` を渡してすべてのツール実行を許可する必要が
+あります。`--reasoning-effort` は Codex と Copilot で利用できます。対応するレベルは
+プロバイダではなくモデルに依存するため、wiggum は値をプロバイダ単位で拒否せず、そのまま
+各プロバイダ CLI へ転送します。非対応の組み合わせは CLI 側の検証エラーになります。
+Claude Code CLI は `--effort` フラグへそのまま転送されますが、モデルによらず
+`low`/`medium`/`high`/`xhigh`/`max` のみ受け付けるため、`claude` 選択時に `none`
+または `minimal` を指定すると wiggum 自身が検証エラーとして拒否します。また
+`--model-verbosity`、`--tool-output-token-limit`、`--lean` は Codex 固有のインライン
+設定であり、Copilot または Claude 選択時に既定値以外を指定すると検証エラーになります。
 
 各 Codex 試行では JSONL の `turn.completed` イベントから input、cached input、output、
 reasoning output の token 使用量を集計し、タスク累計と実行全体の累計をログに表示します。Codex
 がツール出力を切り詰めたイベントを報告した場合は、その件数と設定上限も警告します。
 GitHub Copilot CLI は Codex と同等の機械可読な token 使用量イベントを公開していないため、
-`--provider copilot` では常に使用量が 0 として記録されます。
+`--provider copilot` では常に使用量が 0 として記録されます。Claude Code CLI は
+`--output-format json` の最終レスポンスに input、cached input（プロンプトキャッシュから
+読み取られた分）、output の token 使用量を含めて報告するため、`--provider claude` でも
+これらは集計されます。ただし reasoning（thinking）token の内訳は公開されていないため、
+その値は常に 0 として記録されます。
 
 すべてのオプションと終了コードは、`uv run wiggum run --help` で確認できます。
 
@@ -126,8 +135,8 @@ uv run -m ruff check .
 
 ## English
 
-wiggum is a reusable Ralph loop runner that supports both Codex CLI and GitHub
-Copilot CLI. It selects one pending task from a project's `TASKS.json` ledger,
+wiggum is a reusable Ralph loop runner that supports Codex CLI, GitHub
+Copilot CLI, and Claude Code CLI. It selects one pending task from a project's `TASKS.json` ledger,
 runs exactly one Ralph loop with the selected AI model vendor's CLI, verifies
 the loop's terminal status, and commits the loop's changes, repeating until
 the ledger is complete or a stopping condition is hit. The default vendor is
@@ -190,14 +199,19 @@ Useful options:
   where wiggum writes loop logs, temporary files, and the uv cache.
 - `--no-managed-env` — do not set `UV_CACHE_DIR`, `TMP`, and `TEMP` for the
   child process.
-- `--provider {codex,copilot}` — AI model vendor to use (default: `codex`).
-- `--executable PATH` — vendor CLI executable (default: `codex` or `copilot`).
-  `--codex PATH` remains available as a deprecated alias for Codex.
+- `--provider {codex,copilot,claude}` — AI model vendor to use (default:
+  `codex`).
+- `--executable PATH` — vendor CLI executable (default: `codex`, `copilot`,
+  or `claude`). `--codex PATH` remains available as a deprecated alias for
+  Codex.
 - `--reasoning-effort LEVEL` — reasoning effort (default: `medium`; accepted
-  values: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`). Support for a
-  given level depends on the selected model, not the provider, so wiggum
-  does not reject a level by provider; each provider CLI rejects an
-  unsupported combination itself.
+  values: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`). For
+  Codex and Copilot, support for a given level depends on the selected
+  model, not the provider, so wiggum does not reject a level by provider;
+  each provider CLI rejects an unsupported combination itself. Claude Code
+  CLI's `--effort` flag accepts only `low`, `medium`, `high`, `xhigh`, and
+  `max` regardless of model, so `none` and `minimal` are a validation error
+  for the `claude` provider.
 - `--model-verbosity LEVEL` — Codex output verbosity (default: `low`; Codex
   only).
 - `--tool-output-token-limit N` — maximum tool-output tokens retained in model
@@ -207,23 +221,33 @@ Useful options:
 - `--max-loops N`, `--model NAME`, `--auto-approve`, `--api-retry-count N`,
   `--api-retry-interval-sec N`, `--codex-timeout-sec N`.
 
-`--auto-approve` is required when `--provider copilot` is selected, because
-GitHub Copilot CLI has no partially-unattended mode comparable to Codex's
-`workspace-write` sandbox and must be told to allow every tool with
-`--allow-all-tools`. `--reasoning-effort` is supported by both providers.
-Support for a given level depends on the selected model, not the provider,
-so wiggum forwards the value as-is rather than rejecting it by provider; an
-unsupported combination is a validation error from the provider CLI itself.
-`--model-verbosity`, `--tool-output-token-limit`, and `--lean` are
-Codex-only inline configuration; passing a non-default value together with
-`--provider copilot` is a validation error.
+`--auto-approve` is required when `--provider copilot` or `--provider claude`
+is selected. GitHub Copilot CLI has no partially-unattended mode comparable
+to Codex's `workspace-write` sandbox and must be told to allow every tool
+with `--allow-all-tools`; Claude Code CLI likewise cannot answer permission
+prompts in non-interactive mode, so wiggum passes
+`--permission-mode bypassPermissions` to allow every tool. `--reasoning-effort`
+is supported by Codex and Copilot. Support for a given level depends on the
+selected model, not the provider, so wiggum forwards the value as-is rather
+than rejecting it by provider; an unsupported combination is a validation
+error from the provider CLI itself. Claude Code CLI forwards the value to its
+`--effort` flag too, but that flag accepts only `low`, `medium`, `high`,
+`xhigh`, and `max` regardless of model, so wiggum itself rejects `none` and
+`minimal` for the `claude` provider. `--model-verbosity`,
+`--tool-output-token-limit`, and `--lean` are Codex-only inline
+configuration; passing a non-default value together with `--provider copilot`
+or `--provider claude` is a validation error.
 
 For every Codex attempt, wiggum reads the JSONL `turn.completed` event and logs
 input, cached input, output, and reasoning-output token usage together with task
 and run totals. If Codex reports truncated tool-output events, wiggum also logs
 their count and configured limit as a warning. GitHub Copilot CLI does not
 expose a machine-readable per-turn usage event comparable to Codex's, so
-`--provider copilot` always reports all-zero usage.
+`--provider copilot` always reports all-zero usage. Claude Code CLI's
+`--output-format json` final response reports input, cached input (tokens
+served from the prompt cache), and output token usage, so `--provider claude`
+tracks those as well; it does not break out reasoning (thinking) tokens, so
+that count is always zero.
 
 Run `uv run wiggum run --help` for the full option list and exit codes.
 

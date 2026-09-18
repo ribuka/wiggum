@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from wiggum.defaults import (
-    DEFAULT_MODEL_VERBOSITY,
-    DEFAULT_TOOL_OUTPUT_TOKEN_LIMIT,
+from wiggum.defaults import DEFAULT_MODEL_VERBOSITY, DEFAULT_TOOL_OUTPUT_TOKEN_LIMIT
+from wiggum.providers.constants import (
+    CLAUDE,
+    CLAUDE_REASONING_EFFORTS,
+    CODEX,
+    PROVIDERS,
 )
-from wiggum.providers.constants import COPILOT, PROVIDERS
 
 
 def validate_provider_options(
@@ -25,10 +27,13 @@ def validate_provider_options(
     provider : str
         Selected AI model vendor; one of :data:`wiggum.providers.PROVIDERS`.
     reasoning_effort : str
-        Requested reasoning effort. Not validated here because support for a
-        given level depends on the selected model, not the provider; the
-        provider CLI is responsible for rejecting values its model does not
-        support.
+        Requested reasoning effort. For Codex and GitHub Copilot CLI, support
+        for a given level depends on the selected model, not the provider, so
+        it is not validated here; the provider CLI is responsible for
+        rejecting values its model does not support. Claude Code CLI's
+        ``--effort`` flag has a fixed, provider-level set of accepted values
+        (:data:`wiggum.providers.constants.CLAUDE_REASONING_EFFORTS`)
+        regardless of model, so a value outside that set is rejected here.
     model_verbosity : str
         Requested model verbosity, a Codex-only inline configuration value.
     tool_output_token_limit : int
@@ -38,9 +43,9 @@ def validate_provider_options(
         Whether user Codex configuration and reasoning summaries should be
         ignored; a Codex-only behavior.
     auto_approve : bool
-        Whether requests are automatically approved. GitHub Copilot CLI has
-        no interactive-approval fallback in a Ralph loop, so it requires
-        this to be enabled.
+        Whether requests are automatically approved. Neither GitHub Copilot
+        CLI nor Claude Code CLI has an interactive-approval fallback in a
+        Ralph loop, so both require this to be enabled.
 
     Returns
     -------
@@ -48,10 +53,9 @@ def validate_provider_options(
         Human-readable validation error, or ``None`` when every requested
         option is supported by ``provider``.
     """
-    del reasoning_effort
     if provider not in PROVIDERS:
         return f"--provider has an unsupported value: {provider}"
-    if provider != COPILOT:
+    if provider == CODEX:
         return None
 
     unsupported: list[str] = []
@@ -61,9 +65,11 @@ def validate_provider_options(
         unsupported.append("--tool-output-token-limit")
     if lean:
         unsupported.append("--lean")
+    if provider == CLAUDE and reasoning_effort not in CLAUDE_REASONING_EFFORTS:
+        unsupported.append("--reasoning-effort")
     if unsupported:
         joined = ", ".join(unsupported)
-        return f"--provider copilot does not support: {joined}"
+        return f"--provider {provider} does not support: {joined}"
     if not auto_approve:
-        return "--provider copilot requires --auto-approve"
+        return f"--provider {provider} requires --auto-approve"
     return None

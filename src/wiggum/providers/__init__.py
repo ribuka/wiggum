@@ -13,7 +13,7 @@ Submodules
 ``wiggum.providers.contract``
     ``CommandOptions``/``ProviderAdapter`` dataclasses shared by every
     provider implementation.
-``wiggum.providers.codex`` / ``wiggum.providers.copilot``
+``wiggum.providers.codex`` / ``wiggum.providers.copilot`` / ``wiggum.providers.claude``
     Concrete adapters for each supported provider.
 ``wiggum.providers.registry``
     ``get_adapter`` lookup from provider name to its adapter.
@@ -24,6 +24,7 @@ Submodules
 from __future__ import annotations
 
 from wiggum.providers.constants import (
+    CLAUDE,
     CODEX,
     COPILOT,
     DEFAULT_EXECUTABLES,
@@ -36,6 +37,7 @@ from wiggum.providers.registry import get_adapter
 from wiggum.providers.validation import validate_provider_options
 
 __all__ = [
+    "CLAUDE",
     "CODEX",
     "COPILOT",
     "DEFAULT_EXECUTABLES",
