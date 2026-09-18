@@ -110,8 +110,8 @@ def _add_run_arguments(parser: argparse.ArgumentParser) -> None:
             "reasoning effort; defaults to medium. For codex and copilot, "
             "support for a given level depends on the selected model, not "
             "the provider; an unsupported combination is rejected by the "
-            "provider CLI. Not supported by the claude provider, which "
-            "requires the default value"
+            "provider CLI. For claude, only low/medium/high/xhigh/max are "
+            "supported regardless of model; none/minimal are rejected"
         ),
     )
     parser.add_argument(

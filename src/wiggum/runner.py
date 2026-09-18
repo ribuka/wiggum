@@ -161,8 +161,10 @@ def _run(
         Reasoning effort for each loop. For the ``codex`` and ``copilot``
         providers, support for a given level depends on the selected model,
         not the provider; the provider CLI rejects an unsupported
-        combination itself. Claude Code CLI exposes no reasoning-effort
-        flag at all, so a non-default value is rejected outright for the
+        combination itself. Claude Code CLI's ``--effort`` flag accepts a
+        fixed, provider-level set of values
+        (:data:`wiggum.providers.constants.CLAUDE_REASONING_EFFORTS`)
+        regardless of model; a value outside that set is rejected for the
         ``claude`` provider.
     model_verbosity : str
         Codex model verbosity for each loop. Codex-only; must be left at its
@@ -574,8 +576,10 @@ def run(
         Reasoning effort for each loop. For the ``codex`` and ``copilot``
         providers, support for a given level depends on the selected model,
         not the provider; the provider CLI rejects an unsupported
-        combination itself. Claude Code CLI exposes no reasoning-effort
-        flag at all, so a non-default value is rejected outright for the
+        combination itself. Claude Code CLI's ``--effort`` flag accepts a
+        fixed, provider-level set of values
+        (:data:`wiggum.providers.constants.CLAUDE_REASONING_EFFORTS`)
+        regardless of model; a value outside that set is rejected for the
         ``claude`` provider.
     model_verbosity : str, default "low"
         Codex model verbosity for each loop. Codex-only; must be left at its

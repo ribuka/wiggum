@@ -40,8 +40,16 @@ def test_build_claude_command_reads_the_prompt_from_standard_input() -> None:
     assert "-p" in command
     assert "--output-format" in command
     assert command[command.index("--output-format") + 1] == "json"
+    assert command[command.index("--effort") + 1] == "medium"
     assert "--permission-mode" not in command
     assert "--model" not in command
+
+
+def test_build_claude_command_forwards_reasoning_effort() -> None:
+    """Forward a non-default reasoning effort to Claude Code's --effort flag."""
+    command = build_claude_command("claude", None, reasoning_effort="high")
+
+    assert command[command.index("--effort") + 1] == "high"
 
 
 def test_build_claude_command_bypasses_permissions_when_auto_approve() -> None:
@@ -93,6 +101,54 @@ def test_run_claude_writes_the_log_and_last_message_on_success(tmp_path: Path) -
     assert completed.returncode == 0
     assert output_path.read_text(encoding="utf-8") == "TASK_COMPLETED: TASK-001"
     assert "TASK_COMPLETED: TASK-001" in log_path.read_text(encoding="utf-8")
+
+
+def test_run_claude_keeps_stderr_off_the_json_result_line_in_the_log(tmp_path: Path) -> None:
+    """Never let standard error merge onto the JSON result's log line.
+
+    Regression test: Claude Code CLI can succeed while also writing a
+    warning to standard error without its own trailing newline. If the log
+    concatenated the two streams directly, that warning would land on the
+    same line as the JSON result and break both JSON parsing and
+    read_claude_usage's line-by-line usage lookup.
+    """
+    log_path = tmp_path / "loop.log"
+    output_path = tmp_path / "last-message.txt"
+    payload = json.dumps(
+        {
+            "type": "result",
+            "result": "TASK_COMPLETED: TASK-001",
+            "usage": {"input_tokens": 5, "output_tokens": 3},
+        }
+    )
+    command = [
+        sys.executable,
+        "-c",
+        (
+            "import sys; sys.stdin.read(); "
+            f"sys.stdout.write({payload!r}); "
+            "sys.stderr.write('warning: no trailing newline')"
+        ),
+    ]
+
+    completed = run_claude(
+        command,
+        tmp_path,
+        log_path,
+        environment=os.environ.copy(),
+        prompt="",
+        output_path=output_path,
+    )
+
+    assert completed.returncode == 0
+    assert output_path.read_text(encoding="utf-8") == "TASK_COMPLETED: TASK-001"
+    log_lines = log_path.read_text(encoding="utf-8").splitlines()
+    assert json.loads(log_lines[0]) == {
+        "type": "result",
+        "result": "TASK_COMPLETED: TASK-001",
+        "usage": {"input_tokens": 5, "output_tokens": 3},
+    }
+    assert read_claude_usage(log_path) == TokenUsage(5, 0, 3, 0)
 
 
 def test_run_claude_does_not_write_the_last_message_on_failure(tmp_path: Path) -> None:

@@ -63,7 +63,7 @@ uv run wiggum run
 - `--no-managed-env` — 子プロセスに `UV_CACHE_DIR`、`TMP`、`TEMP` を設定しません。
 - `--provider {codex,copilot,claude}` — 使用する AI モデルベンダー（既定値: `codex`）。
 - `--executable PATH` — ベンダーの CLI 実行ファイル（既定値: `codex`、`copilot`、または `claude`）。`--codex PATH` は Codex 用の非推奨エイリアスとして引き続き利用できます。
-- `--reasoning-effort LEVEL` — 推論量（既定値: `medium`。指定可能な値: `none`/`minimal`/`low`/`medium`/`high`/`xhigh`/`max`）。Codex と Copilot では対応レベルがプロバイダではなくモデルに依存するため、wiggum はプロバイダ単位での拒否は行わず、非対応の組み合わせは各プロバイダ CLI 自身が検証エラーとして扱います。Claude Code CLI には reasoning effort を指定する手段がないため、`claude` プロバイダでは既定値以外を指定すると検証エラーになります。
+- `--reasoning-effort LEVEL` — 推論量（既定値: `medium`。指定可能な値: `none`/`minimal`/`low`/`medium`/`high`/`xhigh`/`max`）。Codex と Copilot では対応レベルがプロバイダではなくモデルに依存するため、wiggum はプロバイダ単位での拒否は行わず、非対応の組み合わせは各プロバイダ CLI 自身が検証エラーとして扱います。Claude Code CLI の `--effort` フラグはモデルによらず `low`/`medium`/`high`/`xhigh`/`max` のみ受け付けるため、`claude` プロバイダで `none`/`minimal` を指定すると検証エラーになります。
 - `--model-verbosity LEVEL` — Codex の出力 verbosity（既定値: `low`。Codex 専用）。
 - `--tool-output-token-limit N` — モデル履歴に保持するツール出力の上限（既定値: `12000` tokens。Codex 専用）。
 - `--lean` — ユーザーの Codex 設定を読み込まず、reasoning summary を無効化します。認証情報は引き続き利用されます（Codex 専用）。
@@ -77,8 +77,9 @@ Claude Code CLI も同様に非対話モードでは承認プロンプトに応�
 あります。`--reasoning-effort` は Codex と Copilot で利用できます。対応するレベルは
 プロバイダではなくモデルに依存するため、wiggum は値をプロバイダ単位で拒否せず、そのまま
 各プロバイダ CLI へ転送します。非対応の組み合わせは CLI 側の検証エラーになります。
-Claude Code CLI には reasoning effort を指定するオプションがないため、`claude`
-選択時に既定値以外を指定すると wiggum 自身が検証エラーとして拒否します。また
+Claude Code CLI は `--effort` フラグへそのまま転送されますが、モデルによらず
+`low`/`medium`/`high`/`xhigh`/`max` のみ受け付けるため、`claude` 選択時に `none`
+または `minimal` を指定すると wiggum 自身が検証エラーとして拒否します。また
 `--model-verbosity`、`--tool-output-token-limit`、`--lean` は Codex 固有のインライン
 設定であり、Copilot または Claude 選択時に既定値以外を指定すると検証エラーになります。
 
@@ -208,8 +209,9 @@ Useful options:
   Codex and Copilot, support for a given level depends on the selected
   model, not the provider, so wiggum does not reject a level by provider;
   each provider CLI rejects an unsupported combination itself. Claude Code
-  CLI has no way to request a reasoning effort, so a non-default value is a
-  validation error for the `claude` provider.
+  CLI's `--effort` flag accepts only `low`, `medium`, `high`, `xhigh`, and
+  `max` regardless of model, so `none` and `minimal` are a validation error
+  for the `claude` provider.
 - `--model-verbosity LEVEL` — Codex output verbosity (default: `low`; Codex
   only).
 - `--tool-output-token-limit N` — maximum tool-output tokens retained in model
@@ -228,11 +230,13 @@ prompts in non-interactive mode, so wiggum passes
 is supported by Codex and Copilot. Support for a given level depends on the
 selected model, not the provider, so wiggum forwards the value as-is rather
 than rejecting it by provider; an unsupported combination is a validation
-error from the provider CLI itself. Claude Code CLI has no reasoning-effort
-option at all, so wiggum itself rejects a non-default value for the `claude`
-provider. `--model-verbosity`, `--tool-output-token-limit`, and `--lean` are
-Codex-only inline configuration; passing a non-default value together with
-`--provider copilot` or `--provider claude` is a validation error.
+error from the provider CLI itself. Claude Code CLI forwards the value to its
+`--effort` flag too, but that flag accepts only `low`, `medium`, `high`,
+`xhigh`, and `max` regardless of model, so wiggum itself rejects `none` and
+`minimal` for the `claude` provider. `--model-verbosity`,
+`--tool-output-token-limit`, and `--lean` are Codex-only inline
+configuration; passing a non-default value together with `--provider copilot`
+or `--provider claude` is a validation error.
 
 For every Codex attempt, wiggum reads the JSONL `turn.completed` event and logs
 input, cached input, output, and reasoning-output token usage together with task

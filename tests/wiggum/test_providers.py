@@ -173,6 +173,23 @@ def test_validate_provider_options_allows_claude_defaults_with_auto_approve() ->
     assert error is None
 
 
+@pytest.mark.parametrize("reasoning_effort", ["low", "medium", "high", "xhigh", "max"])
+def test_validate_provider_options_allows_every_claude_supported_reasoning_effort(
+    reasoning_effort: str,
+) -> None:
+    """Forward every reasoning effort Claude Code CLI's --effort flag accepts."""
+    error = validate_provider_options(
+        "claude",
+        reasoning_effort=reasoning_effort,
+        model_verbosity="low",
+        tool_output_token_limit=12_000,
+        lean=False,
+        auto_approve=True,
+    )
+
+    assert error is None
+
+
 def test_validate_provider_options_requires_auto_approve_for_claude() -> None:
     """Reject Claude runs without auto-approve because loops cannot pause."""
     error = validate_provider_options(
@@ -187,11 +204,14 @@ def test_validate_provider_options_requires_auto_approve_for_claude() -> None:
     assert error == "--provider claude requires --auto-approve"
 
 
-def test_validate_provider_options_rejects_a_non_default_reasoning_effort_for_claude() -> None:
-    """Reject any non-default reasoning effort because Claude Code CLI has no such flag."""
+@pytest.mark.parametrize("reasoning_effort", ["none", "minimal"])
+def test_validate_provider_options_rejects_reasoning_efforts_claude_does_not_accept(
+    reasoning_effort: str,
+) -> None:
+    """Reject reasoning-effort values outside Claude Code CLI's --effort choices."""
     error = validate_provider_options(
         "claude",
-        reasoning_effort="high",
+        reasoning_effort=reasoning_effort,
         model_verbosity="low",
         tool_output_token_limit=12_000,
         lean=False,

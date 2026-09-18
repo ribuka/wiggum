@@ -26,7 +26,12 @@ def build_command(options: CommandOptions) -> list[str]:
     list[str]
         Claude Code subprocess argument vector.
     """
-    return build_claude_command(options.executable, options.model, options.auto_approve)
+    return build_claude_command(
+        options.executable,
+        options.model,
+        options.auto_approve,
+        reasoning_effort=options.reasoning_effort,
+    )
 
 
 def adapter() -> ProviderAdapter:

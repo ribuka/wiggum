@@ -19,3 +19,9 @@ DEFAULT_EXECUTABLES = {CODEX: "codex", COPILOT: "copilot", CLAUDE: "claude"}
 # support for a given level ultimately depends on the selected model, so this
 # set is intentionally permissive rather than gated per provider.
 REASONING_EFFORTS = ("none", "minimal", "low", "medium", "high", "xhigh", "max")
+
+# Reasoning-effort levels Claude Code CLI's --effort flag accepts. Unlike
+# Codex and GitHub Copilot CLI, this is a hard provider-level limit rather
+# than a model-dependent one: "none" and "minimal" are not in this set and
+# are always rejected for the claude provider, regardless of model.
+CLAUDE_REASONING_EFFORTS = ("low", "medium", "high", "xhigh", "max")

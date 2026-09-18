@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from wiggum.defaults import (
-    DEFAULT_MODEL_VERBOSITY,
-    DEFAULT_REASONING_EFFORT,
-    DEFAULT_TOOL_OUTPUT_TOKEN_LIMIT,
+from wiggum.defaults import DEFAULT_MODEL_VERBOSITY, DEFAULT_TOOL_OUTPUT_TOKEN_LIMIT
+from wiggum.providers.constants import (
+    CLAUDE,
+    CLAUDE_REASONING_EFFORTS,
+    CODEX,
+    PROVIDERS,
 )
-from wiggum.providers.constants import CLAUDE, CODEX, PROVIDERS
 
 
 def validate_provider_options(
@@ -29,9 +30,10 @@ def validate_provider_options(
         Requested reasoning effort. For Codex and GitHub Copilot CLI, support
         for a given level depends on the selected model, not the provider, so
         it is not validated here; the provider CLI is responsible for
-        rejecting values its model does not support. Claude Code CLI exposes
-        no reasoning-effort flag at all, so a non-default value is always
-        rejected for that provider.
+        rejecting values its model does not support. Claude Code CLI's
+        ``--effort`` flag has a fixed, provider-level set of accepted values
+        (:data:`wiggum.providers.constants.CLAUDE_REASONING_EFFORTS`)
+        regardless of model, so a value outside that set is rejected here.
     model_verbosity : str
         Requested model verbosity, a Codex-only inline configuration value.
     tool_output_token_limit : int
@@ -63,7 +65,7 @@ def validate_provider_options(
         unsupported.append("--tool-output-token-limit")
     if lean:
         unsupported.append("--lean")
-    if provider == CLAUDE and reasoning_effort != DEFAULT_REASONING_EFFORT:
+    if provider == CLAUDE and reasoning_effort not in CLAUDE_REASONING_EFFORTS:
         unsupported.append("--reasoning-effort")
     if unsupported:
         joined = ", ".join(unsupported)

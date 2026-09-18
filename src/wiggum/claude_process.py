@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from wiggum.defaults import DEFAULT_CODEX_TIMEOUT_SEC
+from wiggum.defaults import DEFAULT_CODEX_TIMEOUT_SEC, DEFAULT_REASONING_EFFORT
 from wiggum.executable_resolution import resolve_executable
 from wiggum.token_usage import TokenUsage
 
@@ -43,6 +43,37 @@ def _decode(output: str | bytes | None) -> str:
     return output
 
 
+def _combine_streams(stdout: str, stderr: str) -> str:
+    """Join captured standard output and standard error for the loop log.
+
+    A separating newline is forced between the two streams so standard
+    error text can never land on the same line as standard output. This
+    matters because ``--output-format json`` writes its JSON result as a
+    single line of standard output, and :func:`read_claude_usage` parses the
+    log one line at a time; without the separator, standard error emitted
+    without its own trailing newline would merge into that line and break
+    both usage parsing and the JSON itself.
+
+    Parameters
+    ----------
+    stdout : str
+        Captured standard output.
+    stderr : str
+        Captured standard error.
+
+    Returns
+    -------
+    str
+        Combined log text with standard output and standard error each
+        starting on their own line.
+    """
+    if not stderr:
+        return stdout
+    if not stdout or stdout.endswith("\n"):
+        return stdout + stderr
+    return stdout + "\n" + stderr
+
+
 def resolve_claude_executable(executable: str) -> str | None:
     """Resolve a Claude Code CLI executable name to an absolute path.
 
@@ -63,6 +94,8 @@ def build_claude_command(
     executable: str,
     model: str | None,
     auto_approve: bool = False,
+    *,
+    reasoning_effort: str = DEFAULT_REASONING_EFFORT,
 ) -> list[str]:
     """Build the non-interactive Claude Code CLI command for one loop.
 
@@ -77,6 +110,12 @@ def build_claude_command(
         sandboxed, partially-unattended mode comparable to Codex's
         ``workspace-write`` sandbox, so a Ralph loop requires this to be
         enabled; callers must validate that before building the command.
+    reasoning_effort : str, default "medium"
+        Reasoning effort passed to Claude Code's ``--effort`` flag. Callers
+        must validate this against
+        :data:`wiggum.providers.constants.CLAUDE_REASONING_EFFORTS` before
+        building the command; Claude Code CLI's accepted values do not vary
+        by model the way Codex's and Copilot's do.
 
     Returns
     -------
@@ -88,6 +127,8 @@ def build_claude_command(
         "-p",
         "--output-format",
         "json",
+        "--effort",
+        reasoning_effort,
     ]
     if auto_approve:
         command.extend(["--permission-mode", "bypassPermissions"])
@@ -189,9 +230,9 @@ def run_claude(
         # underlying Popen was configured with text=True.
         partial_stdout = _decode(error.stdout)
         partial_stderr = _decode(error.stderr)
-        log_path.write_text(partial_stdout + partial_stderr, encoding="utf-8")
+        log_path.write_text(_combine_streams(partial_stdout, partial_stderr), encoding="utf-8")
         raise
-    log_path.write_text(completed.stdout + completed.stderr, encoding="utf-8")
+    log_path.write_text(_combine_streams(completed.stdout, completed.stderr), encoding="utf-8")
     if completed.returncode == 0:
         result_text = _extract_result_text(completed.stdout)
         if result_text is not None:
