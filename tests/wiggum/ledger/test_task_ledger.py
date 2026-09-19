@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from wiggum.task_ledger import (
+from wiggum.ledger.task_ledger import (
     read_ralph_tasks,
     read_task_contract,
     task_progress,

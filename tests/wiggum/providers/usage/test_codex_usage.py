@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from wiggum.codex_usage import read_codex_usage
-from wiggum.token_usage import TokenUsage
+from wiggum.providers.usage.codex_usage import read_codex_usage
+from wiggum.providers.usage.token_usage import TokenUsage
 
 
 def test_read_codex_usage_sums_completed_turns_and_ignores_other_lines(

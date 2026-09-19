@@ -6,7 +6,7 @@ import os
 import sys
 from pathlib import Path
 
-from wiggum.codex_process import (
+from wiggum.providers.codex import (
     build_codex_command,
     is_retryable_codex_failure,
     resolve_codex_executable,

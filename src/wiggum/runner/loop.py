@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import json
 import subprocess
 import tempfile
 import time
 from datetime import UTC, datetime
-from importlib import resources
 from pathlib import Path
 
 from loguru import logger
@@ -20,7 +18,9 @@ from wiggum.defaults import (
     DEFAULT_MODEL_VERBOSITY,
     DEFAULT_REASONING_EFFORT,
     DEFAULT_TOOL_OUTPUT_TOKEN_LIMIT,
-    MODEL_VERBOSITIES,
+)
+from wiggum.env.process_environment import (
+    build_process_environment as build_codex_environment,
 )
 from wiggum.exit_codes import ExitCode
 from wiggum.git_ops import (
@@ -30,92 +30,19 @@ from wiggum.git_ops import (
     require_clean_worktree,
     require_git_output,
 )
-from wiggum.loop_log import create_running_log, finalize_log
-from wiggum.process_environment import (
-    build_process_environment as build_codex_environment,
-)
-from wiggum.protocol import classify_output, validate_selected_task
+from wiggum.ledger.protocol import classify_output, validate_selected_task
+from wiggum.ledger.task_ledger import read_task_contract, task_snapshot
+from wiggum.logging.loop_log import create_running_log, finalize_log
 from wiggum.providers import (
     DEFAULT_EXECUTABLES,
     DEFAULT_PROVIDER,
-    REASONING_EFFORTS,
     CommandOptions,
     get_adapter,
-    validate_provider_options,
 )
-from wiggum.task_ledger import read_task_contract, task_snapshot
-from wiggum.token_usage import TokenUsage
+from wiggum.providers.usage.token_usage import TokenUsage
+from wiggum.runner.prompt import default_prompt_text, prompt_for_selected_task
+from wiggum.runner.validation import validate_git_preconditions, validate_run_arguments
 from wiggum.tool_output_monitor import read_tool_output_monitor
-
-
-def _default_prompt_text() -> str:
-    """Return wiggum's bundled Ralph rules and loop prompt.
-
-    Returns
-    -------
-    str
-        UTF-8 text of the packaged general rules followed by the loop prompt.
-    """
-    templates_root = resources.files("wiggum") / "templates"
-    general_rules = (templates_root / "RALPH.md").read_text(encoding="utf-8")
-    loop_prompt = (templates_root / "ralph_prompt.md").read_text(encoding="utf-8")
-    return f"{general_rules.rstrip()}\n\n{loop_prompt}"
-
-
-def _prompt_for_selected_task(
-    prompt: str,
-    selected_task_id: str,
-    selected_task_contract: dict[str, object],
-) -> str:
-    """Append the runner-selected task contract to a Codex prompt.
-
-    Parameters
-    ----------
-    prompt : str
-        Base prompt containing the general Ralph loop instructions.
-    selected_task_id : str
-        Task identifier selected from the ledger by the parent runner.
-    selected_task_contract : dict[str, object]
-        Complete JSON object for the selected task.
-
-    Returns
-    -------
-    str
-        Prompt that names the only task the Codex child may process.
-    """
-    return (
-        f"{prompt.rstrip()}\n\n"
-        "## Runner-selected task\n\n"
-        f"The parent runner selected `{selected_task_id}` for this loop. The complete "
-        "task contract is below. Work only on it; do not select or start another task. "
-        "Do not read `TASKS.json` to select a task or discover requirements; read it only "
-        "when updating this task's status. If the ledger conflicts with this contract, "
-        f"preserve existing changes and report `TASK_BLOCKED: {selected_task_id}`.\n\n"
-        f"```json\n{json.dumps(selected_task_contract, ensure_ascii=False, indent=2)}\n```\n"
-    )
-
-
-def _validate_required_files(repo: Path, tasks_path: Path) -> str | None:
-    """Return a preflight error for a missing required repository file.
-
-    Parameters
-    ----------
-    repo : Path
-        Git repository root containing the project configuration.
-    tasks_path : Path
-        Ralph task ledger selected for this run.
-
-    Returns
-    -------
-    str | None
-        Human-readable error message, or ``None`` when every required file is
-        present as a regular file.
-    """
-    required_paths = (tasks_path, repo / "RALPH_PROJECT.md")
-    for required_path in required_paths:
-        if not required_path.is_file():
-            return f"Required file does not exist: {required_path}"
-    return None
 
 
 def _run(
@@ -209,44 +136,23 @@ def _run(
         Runner outcome.
     """
     repo = repo.resolve()
-    if max_loops < 1:
-        logger.error("--max-loops must be at least 1")
-        return ExitCode.PREFLIGHT_ERROR
-    if api_retry_count is not None and api_retry_count < 0:
-        logger.error("--api-retry-count must be at least 0")
-        return ExitCode.PREFLIGHT_ERROR
-    if api_retry_interval_sec < 0:
-        logger.error("--api-retry-interval-sec must be at least 0")
-        return ExitCode.PREFLIGHT_ERROR
-    if codex_timeout_sec < 1:
-        logger.error("--codex-timeout-sec must be at least 1")
-        return ExitCode.PREFLIGHT_ERROR
-    if reasoning_effort not in REASONING_EFFORTS:
-        logger.error("--reasoning-effort has an unsupported value: {}", reasoning_effort)
-        return ExitCode.PREFLIGHT_ERROR
-    if model_verbosity not in MODEL_VERBOSITIES:
-        logger.error("--model-verbosity has an unsupported value: {}", model_verbosity)
-        return ExitCode.PREFLIGHT_ERROR
-    if tool_output_token_limit < 1:
-        logger.error("--tool-output-token-limit must be at least 1")
-        return ExitCode.PREFLIGHT_ERROR
-    provider_option_error = validate_provider_options(
-        provider,
+    argument_error = validate_run_arguments(
+        max_loops=max_loops,
+        api_retry_count=api_retry_count,
+        api_retry_interval_sec=api_retry_interval_sec,
+        codex_timeout_sec=codex_timeout_sec,
         reasoning_effort=reasoning_effort,
         model_verbosity=model_verbosity,
         tool_output_token_limit=tool_output_token_limit,
+        provider=provider,
         lean=lean,
         auto_approve=auto_approve,
+        prompt_path=prompt_path,
+        repo=repo,
+        tasks_path=tasks_path,
     )
-    if provider_option_error is not None:
-        logger.error("{}", provider_option_error)
-        return ExitCode.PREFLIGHT_ERROR
-    if prompt_path is not None and not prompt_path.is_file():
-        logger.error("Prompt file does not exist: {}", prompt_path)
-        return ExitCode.PREFLIGHT_ERROR
-    required_file_error = _validate_required_files(repo, tasks_path)
-    if required_file_error is not None:
-        logger.error("{}", required_file_error)
+    if argument_error is not None:
+        logger.error("{}", argument_error)
         return ExitCode.PREFLIGHT_ERROR
     adapter = get_adapter(provider)
     resolved_executable = adapter.resolve_executable(executable)
@@ -254,19 +160,15 @@ def _run(
         logger.error("{} executable not found: {}", provider.capitalize(), executable)
         return ExitCode.PREFLIGHT_ERROR
 
-    try:
-        top_level = Path(require_git_output(repo, "rev-parse", "--show-toplevel")).resolve()
-        if top_level != repo:
-            raise RuntimeError(f"--repo must be the Git root: {top_level}")
-        require_clean_worktree(repo)
-    except RuntimeError as error:
-        logger.error("{}", error)
+    git_precondition_error = validate_git_preconditions(repo)
+    if git_precondition_error is not None:
+        logger.error("{}", git_precondition_error)
         return ExitCode.PREFLIGHT_ERROR
 
     prompt = (
         prompt_path.read_text(encoding="utf-8")
         if prompt_path is not None
-        else _default_prompt_text()
+        else default_prompt_text()
     )
     temp_dir.mkdir(parents=True, exist_ok=True)
     logs_dir.mkdir(parents=True, exist_ok=True)
@@ -342,7 +244,7 @@ def _run(
         )
         if selected_task_contract is None:
             raise AssertionError("a selected task must have a task contract")
-        codex_prompt = _prompt_for_selected_task(
+        codex_prompt = prompt_for_selected_task(
             prompt,
             selected_task_id,
             selected_task_contract,

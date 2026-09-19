@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from wiggum.token_usage import TokenUsage
+from wiggum.providers.usage.token_usage import TokenUsage
 
 
 def test_token_usage_adds_counts_without_double_counting_reasoning() -> None:

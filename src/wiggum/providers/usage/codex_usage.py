@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from wiggum.token_usage import TokenUsage
+from wiggum.providers.usage.token_usage import TokenUsage
 
 __all__ = ["TokenUsage", "read_codex_usage"]
 

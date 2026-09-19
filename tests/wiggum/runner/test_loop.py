@@ -9,7 +9,8 @@ import pytest
 
 import wiggum.providers.claude as claude_provider_module
 import wiggum.providers.codex as codex_provider_module
-import wiggum.runner as runner_module
+import wiggum.runner.loop as loop_module
+import wiggum.runner.validation as validation_module
 from wiggum.exit_codes import ExitCode
 from wiggum.runner import run
 
@@ -79,12 +80,12 @@ def _configure_dry_run(monkeypatch: pytest.MonkeyPatch, repo: Path) -> None:
         Expected Git repository root.
     """
     monkeypatch.setattr(codex_provider_module, "resolve_codex_executable", lambda value: value)
-    monkeypatch.setattr(
-        runner_module,
-        "require_git_output",
-        lambda target, *args: str(repo) if args == ("rev-parse", "--show-toplevel") else "before",
+    require_git_output_stub = (
+        lambda target, *args: str(repo) if args == ("rev-parse", "--show-toplevel") else "before"
     )
-    monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
+    monkeypatch.setattr(validation_module, "require_git_output", require_git_output_stub)
+    monkeypatch.setattr(loop_module, "require_git_output", require_git_output_stub)
+    monkeypatch.setattr(validation_module, "require_clean_worktree", lambda repo: None)
 
 
 def test_run_defaults_to_tasks_json_and_injects_only_selected_contract(
@@ -159,12 +160,12 @@ def test_run_dry_run_builds_a_claude_command(
         "resolve_claude_executable",
         lambda value: value,
     )
-    monkeypatch.setattr(
-        runner_module,
-        "require_git_output",
-        lambda target, *args: str(tmp_path) if args == ("rev-parse", "--show-toplevel") else "before",
+    require_git_output_stub = (
+        lambda target, *args: str(tmp_path) if args == ("rev-parse", "--show-toplevel") else "before"
     )
-    monkeypatch.setattr(runner_module, "require_clean_worktree", lambda repo: None)
+    monkeypatch.setattr(validation_module, "require_git_output", require_git_output_stub)
+    monkeypatch.setattr(loop_module, "require_git_output", require_git_output_stub)
+    monkeypatch.setattr(validation_module, "require_clean_worktree", lambda repo: None)
 
     result = run(
         repo=tmp_path,
@@ -178,11 +179,3 @@ def test_run_dry_run_builds_a_claude_command(
     assert "claude" in output
     assert "--permission-mode" in output
     assert "bypassPermissions" in output
-
-
-def test_prompt_formats_contract_as_json() -> None:
-    """Format selected task contracts as readable JSON."""
-    prompt = runner_module._prompt_for_selected_task("base", "TASK-001", _task("TASK-001"))
-
-    assert "```json" in prompt
-    assert '"id": "TASK-001"' in prompt

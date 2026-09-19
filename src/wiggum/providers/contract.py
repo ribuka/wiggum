@@ -14,7 +14,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from wiggum.token_usage import TokenUsage
+from wiggum.providers.usage.token_usage import TokenUsage
 
 
 @dataclass(frozen=True)

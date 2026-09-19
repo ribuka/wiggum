@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from wiggum.copilot_process import (
+from wiggum.providers.copilot import (
     build_copilot_command,
     is_retryable_copilot_failure,
     resolve_copilot_executable,

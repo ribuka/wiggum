@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
-from wiggum.loop_log import create_running_log, finalize_log
+from wiggum.logging.loop_log import create_running_log, finalize_log
 
 
 def test_create_running_log_uses_task_number_and_timestamp(tmp_path: Path) -> None:

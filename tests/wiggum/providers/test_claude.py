@@ -10,14 +10,14 @@ from pathlib import Path
 
 import pytest
 
-from wiggum.claude_process import (
+from wiggum.providers.claude import (
     build_claude_command,
     is_retryable_claude_failure,
     read_claude_usage,
     resolve_claude_executable,
     run_claude,
 )
-from wiggum.token_usage import TokenUsage
+from wiggum.providers.usage.token_usage import TokenUsage
 
 
 def test_resolve_claude_executable_accepts_an_existing_file_path() -> None:
