@@ -49,11 +49,10 @@ def _combine_streams(stdout: str, stderr: str) -> str:
     A separating newline is forced between the two streams so standard
     error text can never land on the same line as standard output. This
     matters because ``--output-format stream-json`` writes each event as its
-    own line of standard output, and :func:`read_claude_usage` and
-    :func:`_extract_result_text` both parse the log one line at a time;
-    without the separator, standard error emitted without its own trailing
-    newline would merge into the final event's line and break both usage
-    parsing and that line's JSON.
+    own line of standard output, and :func:`read_claude_usage` parses the
+    written log file one line at a time; without the separator, standard
+    error emitted without its own trailing newline would merge into the
+    final event's line and break both usage parsing and that line's JSON.
 
     Parameters
     ----------
