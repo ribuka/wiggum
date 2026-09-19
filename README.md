@@ -88,7 +88,7 @@ reasoning output の token 使用量を集計し、タスク累計と実行全�
 がツール出力を切り詰めたイベントを報告した場合は、その件数と設定上限も警告します。
 GitHub Copilot CLI は Codex と同等の機械可読な token 使用量イベントを公開していないため、
 `--provider copilot` では常に使用量が 0 として記録されます。Claude Code CLI は
-`--output-format json` の最終レスポンスに input、cached input（プロンプトキャッシュから
+`--output-format stream-json` の最終 `result` イベントに input、cached input（プロンプトキャッシュから
 読み取られた分）、output の token 使用量を含めて報告するため、`--provider claude` でも
 これらは集計されます。ただし reasoning（thinking）token の内訳は公開されていないため、
 その値は常に 0 として記録されます。
@@ -244,7 +244,7 @@ and run totals. If Codex reports truncated tool-output events, wiggum also logs
 their count and configured limit as a warning. GitHub Copilot CLI does not
 expose a machine-readable per-turn usage event comparable to Codex's, so
 `--provider copilot` always reports all-zero usage. Claude Code CLI's
-`--output-format json` final response reports input, cached input (tokens
+`--output-format stream-json` final `result` event reports input, cached input (tokens
 served from the prompt cache), and output token usage, so `--provider claude`
 tracks those as well; it does not break out reasoning (thinking) tokens, so
 that count is always zero.
