@@ -142,16 +142,6 @@ def _run(
     """
     repo = repo.resolve()
     argument_error = validate_run_arguments(
-        max_loops=max_loops,
-        api_retry_count=api_retry_count,
-        api_retry_interval_sec=api_retry_interval_sec,
-        codex_timeout_sec=codex_timeout_sec,
-        reasoning_effort=reasoning_effort,
-        model_verbosity=model_verbosity,
-        tool_output_token_limit=tool_output_token_limit,
-        provider=provider,
-        lean=lean,
-        auto_approve=auto_approve,
         prompt_path=prompt_path,
         paths=paths,
     )

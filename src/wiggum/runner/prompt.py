@@ -12,6 +12,8 @@ from wiggum.config import RalphPaths
 def default_prompt_text(paths: RalphPaths, repo: Path) -> str:
     """Return wiggum's bundled Ralph rules and loop prompt.
 
+    Parameters
+    ----------
     paths : RalphPaths
         Resolved Ralph file paths.
     repo : Path

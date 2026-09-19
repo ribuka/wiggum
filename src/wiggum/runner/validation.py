@@ -106,45 +106,13 @@ def validate_run_options(
 
 def validate_run_arguments(
     *,
-    max_loops: int,
-    api_retry_count: int | None,
-    api_retry_interval_sec: int,
-    codex_timeout_sec: int,
-    reasoning_effort: str,
-    model_verbosity: str,
-    tool_output_token_limit: int,
-    provider: str,
-    lean: bool,
-    auto_approve: bool,
     prompt_path: Path | None,
     paths: RalphPaths,
 ) -> str | None:
-    """Validate runner arguments and required files before any loop starts.
+    """Validate file arguments and required files before any loop starts.
 
     Parameters
     ----------
-    max_loops : int
-        Maximum number of agent processes to start.
-    api_retry_count : int | None
-        Number of additional attempts after an agent API or protocol
-        failure. ``None`` disables retries.
-    api_retry_interval_sec : int
-        Seconds to wait between agent API retry attempts.
-    codex_timeout_sec : int
-        Maximum time to wait for each agent child process.
-    reasoning_effort : str
-        Reasoning effort for each loop.
-    model_verbosity : str
-        Codex model verbosity for each loop.
-    tool_output_token_limit : int
-        Maximum tokens retained from one tool output in model history.
-    provider : str
-        Selected AI model vendor; one of :data:`wiggum.providers.PROVIDERS`.
-    lean : bool
-        Whether to ignore user Codex configuration and reasoning summaries.
-    auto_approve : bool
-        Automatically approve agent requests instead of requiring
-        interactive confirmation.
     prompt_path : Path | None
         UTF-8 prompt file used for every loop, or ``None`` to use wiggum's
         bundled default prompt.
@@ -154,23 +122,8 @@ def validate_run_arguments(
     Returns
     -------
     str | None
-        Human-readable error message, or ``None`` when every argument and
-        required file is valid.
+        Human-readable error message, or ``None`` when every file is valid.
     """
-    option_error = validate_run_options(
-        max_loops=max_loops,
-        api_retry_count=api_retry_count,
-        api_retry_interval_sec=api_retry_interval_sec,
-        codex_timeout_sec=codex_timeout_sec,
-        reasoning_effort=reasoning_effort,
-        model_verbosity=model_verbosity,
-        tool_output_token_limit=tool_output_token_limit,
-        provider=provider,
-        lean=lean,
-        auto_approve=auto_approve,
-    )
-    if option_error is not None:
-        return option_error
     if prompt_path is not None and not prompt_path.is_file():
         return f"Prompt file does not exist: {prompt_path}"
     return _validate_required_files(paths)
