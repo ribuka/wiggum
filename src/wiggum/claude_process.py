@@ -48,11 +48,11 @@ def _combine_streams(stdout: str, stderr: str) -> str:
 
     A separating newline is forced between the two streams so standard
     error text can never land on the same line as standard output. This
-    matters because ``--output-format json`` writes its JSON result as a
-    single line of standard output, and :func:`read_claude_usage` parses the
-    log one line at a time; without the separator, standard error emitted
-    without its own trailing newline would merge into that line and break
-    both usage parsing and the JSON itself.
+    matters because ``--output-format stream-json`` writes each event as its
+    own line of standard output, and :func:`read_claude_usage` parses the
+    written log file one line at a time; without the separator, standard
+    error emitted without its own trailing newline would merge into the
+    final event's line and break both usage parsing and that line's JSON.
 
     Parameters
     ----------
@@ -126,7 +126,8 @@ def build_claude_command(
         executable,
         "-p",
         "--output-format",
-        "json",
+        "stream-json",
+        "--verbose",
         "--effort",
         reasoning_effort,
     ]
@@ -140,27 +141,30 @@ def build_claude_command(
 
 
 def _extract_result_text(stdout: str) -> str | None:
-    """Extract the final assistant message from Claude Code CLI's JSON output.
+    """Extract the final assistant message from Claude Code CLI's JSONL output.
 
     Parameters
     ----------
     stdout : str
-        Complete standard output produced by ``--output-format json``.
+        Complete standard output produced by ``--output-format stream-json``,
+        one JSON event object per line.
 
     Returns
     -------
     str | None
-        The ``result`` field's text, or ``None`` when ``stdout`` is not the
-        expected single JSON object with a string ``result`` field.
+        The ``result`` field's text from the line whose ``type`` is
+        ``"result"``, or ``None`` when no such line is present.
     """
-    try:
-        payload = json.loads(stdout)
-    except (json.JSONDecodeError, TypeError):
-        return None
-    if not isinstance(payload, dict):
-        return None
-    result = payload.get("result")
-    return result if isinstance(result, str) else None
+    for line in stdout.splitlines():
+        try:
+            payload = json.loads(line)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if not isinstance(payload, dict) or payload.get("type") != "result":
+            continue
+        result = payload.get("result")
+        return result if isinstance(result, str) else None
+    return None
 
 
 def run_claude(
@@ -175,13 +179,16 @@ def run_claude(
     """Run Claude Code CLI and capture its final message for one loop.
 
     Claude Code CLI has no ``--output-last-message`` flag comparable to
-    Codex's. With ``--output-format json`` its standard output is a single
-    JSON object whose ``result`` field holds the agent's final response, so
-    that field is extracted and written to ``output_path`` on its own:
-    ``output_path`` must never contain the surrounding JSON, or protocol
-    detection for ``TASK_COMPLETED``/``TASK_INCOMPLETE``/``TASK_BLOCKED``
-    would break. The loop log still records the raw JSON standard output and
-    standard error for troubleshooting and token-usage parsing.
+    Codex's. With ``--output-format stream-json`` its standard output is a
+    sequence of JSONL events (tool calls, agent messages, and a final
+    ``type: "result"`` event), mirroring the granularity of Codex's
+    ``codex exec`` streaming JSON log. The ``result`` field of that final
+    event holds the agent's final response, so that field is extracted and
+    written to ``output_path`` on its own: ``output_path`` must never contain
+    the surrounding JSON, or protocol detection for
+    ``TASK_COMPLETED``/``TASK_INCOMPLETE``/``TASK_BLOCKED`` would break. The
+    loop log still records the raw JSONL standard output and standard error
+    for troubleshooting and token-usage parsing.
 
     Parameters
     ----------
@@ -285,9 +292,9 @@ def _nonnegative_int(value: Any) -> int:
 
 
 def read_claude_usage(log_path: Path) -> TokenUsage:
-    """Parse token usage from Claude Code CLI's final JSON result object.
+    """Parse token usage from Claude Code CLI's final JSON result event.
 
-    ``--output-format json`` reports ``usage.input_tokens`` net of prompt
+    ``--output-format stream-json`` reports ``usage.input_tokens`` net of prompt
     caching, with cache activity broken out separately as
     ``cache_creation_input_tokens`` and ``cache_read_input_tokens``. Both are
     folded into :attr:`TokenUsage.input_tokens` because they were tokens the

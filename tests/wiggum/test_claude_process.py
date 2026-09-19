@@ -33,13 +33,14 @@ def test_resolve_claude_executable_returns_none_for_unknown_name() -> None:
 
 
 def test_build_claude_command_reads_the_prompt_from_standard_input() -> None:
-    """Build a non-interactive, JSON-output command with no positional prompt."""
+    """Build a non-interactive, streaming-JSON-output command with no positional prompt."""
     command = build_claude_command("claude", None)
 
     assert command[0] == "claude"
     assert "-p" in command
     assert "--output-format" in command
-    assert command[command.index("--output-format") + 1] == "json"
+    assert command[command.index("--output-format") + 1] == "stream-json"
+    assert "--verbose" in command
     assert command[command.index("--effort") + 1] == "medium"
     assert "--permission-mode" not in command
     assert "--model" not in command
@@ -61,7 +62,7 @@ def test_build_claude_command_bypasses_permissions_when_auto_approve() -> None:
 
 
 def _json_stdout_script(result: str, usage: dict[str, int]) -> str:
-    """Build a Python one-liner that prints a Claude Code JSON result object.
+    """Build a Python one-liner that prints a Claude Code JSON result event.
 
     Parameters
     ----------
@@ -77,6 +78,37 @@ def _json_stdout_script(result: str, usage: dict[str, int]) -> str:
     """
     payload = json.dumps({"type": "result", "result": result, "usage": usage})
     return f"import sys; sys.stdin.read(); print({payload!r})"
+
+
+def test_run_claude_extracts_the_result_line_from_a_multi_event_stream(tmp_path: Path) -> None:
+    """Find the final result event among preceding tool-call and message events."""
+    log_path = tmp_path / "loop.log"
+    output_path = tmp_path / "last-message.txt"
+    events = [
+        json.dumps({"type": "system", "subtype": "init"}),
+        json.dumps({"type": "assistant", "message": {"content": [{"type": "text", "text": "..."}]}}),
+        json.dumps(
+            {
+                "type": "result",
+                "result": "TASK_COMPLETED: TASK-001",
+                "usage": {"input_tokens": 1, "output_tokens": 1},
+            }
+        ),
+    ]
+    script = "import sys; sys.stdin.read()\n" + "\n".join(f"print({event!r})" for event in events)
+    command = [sys.executable, "-c", script]
+
+    completed = run_claude(
+        command,
+        tmp_path,
+        log_path,
+        environment=os.environ.copy(),
+        prompt="do the task",
+        output_path=output_path,
+    )
+
+    assert completed.returncode == 0
+    assert output_path.read_text(encoding="utf-8") == "TASK_COMPLETED: TASK-001"
 
 
 def test_run_claude_writes_the_log_and_last_message_on_success(tmp_path: Path) -> None:
