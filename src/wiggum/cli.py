@@ -8,7 +8,6 @@ from pathlib import Path
 
 from loguru import logger
 
-from wiggum.console_logging import configure_console_logging
 from wiggum.defaults import (
     DEFAULT_API_RETRY_COUNT,
     DEFAULT_API_RETRY_INTERVAL_SEC,
@@ -20,6 +19,7 @@ from wiggum.defaults import (
     MODEL_VERBOSITIES,
 )
 from wiggum.exit_codes import ExitCode
+from wiggum.logging.console_logging import configure_console_logging
 from wiggum.providers import DEFAULT_PROVIDER, PROVIDERS, REASONING_EFFORTS
 from wiggum.runner import run
 from wiggum.scaffold import scaffold

@@ -10,8 +10,8 @@ import pytest
 from loguru import logger
 
 from wiggum.cli import main
-from wiggum.console_logging import configure_console_logging
 from wiggum.exit_codes import ExitCode
+from wiggum.logging.console_logging import configure_console_logging
 
 
 @pytest.fixture(autouse=True)
@@ -90,8 +90,8 @@ def test_console_logging_supports_cp932_console_streams(
     """Write status messages without unsupported Unicode characters."""
     buffer = BytesIO()
     stream = TextIOWrapper(buffer, encoding="cp932")
-    monkeypatch.setattr("wiggum.console_logging.sys.stdout", stream)
-    monkeypatch.setattr("wiggum.console_logging.sys.stderr", stream)
+    monkeypatch.setattr("wiggum.logging.console_logging.sys.stdout", stream)
+    monkeypatch.setattr("wiggum.logging.console_logging.sys.stderr", stream)
 
     configure_console_logging()
     logger.info("task started")
@@ -115,4 +115,4 @@ def test_wiggum_main_uses_formatted_console_logging(
     assert captured.out.count("Ralph runner end") == 1
     assert "ERROR" in captured.err
     assert "--max-loops must be at least 1" in captured.err
-    assert re.search(r"runner\.py:\d+", captured.err)
+    assert re.search(r"loop\.py:\d+", captured.err)

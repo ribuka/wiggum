@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from wiggum.protocol import classify_output, validate_selected_task
+from wiggum.ledger.protocol import classify_output, validate_selected_task
 
 
 @pytest.mark.parametrize(

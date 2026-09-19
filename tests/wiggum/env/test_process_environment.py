@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from wiggum.process_environment import build_process_environment
+from wiggum.env.process_environment import build_process_environment
 
 
 def test_build_process_environment_sets_isolated_paths_by_default(tmp_path: Path) -> None:
