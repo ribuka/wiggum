@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+from wiggum.config import RalphPaths
 from wiggum.runner.prompt import prompt_for_selected_task
 
 
@@ -36,7 +39,16 @@ def _task(task_id: str, **overrides: object) -> dict[str, object]:
 
 def test_prompt_formats_contract_as_json() -> None:
     """Format selected task contracts as readable JSON."""
-    prompt = prompt_for_selected_task("base", "TASK-001", _task("TASK-001"))
+    repo = Path("C:/repo")
+    paths = RalphPaths(
+        tasks=repo / "wiggum" / "TASKS.json",
+        project=repo / "wiggum" / "RALPH_PROJECT.md",
+        progress=repo / "wiggum" / "PROGRESS.md",
+    )
+    prompt = prompt_for_selected_task("base", "TASK-001", _task("TASK-001"), paths, repo)
 
     assert "```json" in prompt
     assert '"id": "TASK-001"' in prompt
+    assert "wiggum/RALPH_PROJECT.md" in prompt
+    assert "wiggum/TASKS.json" in prompt
+    assert "wiggum/PROGRESS.md" in prompt

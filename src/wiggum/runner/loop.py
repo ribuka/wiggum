@@ -10,6 +10,7 @@ from pathlib import Path
 
 from loguru import logger
 
+from wiggum.config import ConfigurationError, RalphPaths, load_ralph_paths
 from wiggum.defaults import (
     DEFAULT_API_RETRY_COUNT,
     DEFAULT_API_RETRY_INTERVAL_SEC,
@@ -41,7 +42,11 @@ from wiggum.providers import (
 )
 from wiggum.providers.usage.token_usage import TokenUsage
 from wiggum.runner.prompt import default_prompt_text, prompt_for_selected_task
-from wiggum.runner.validation import validate_git_preconditions, validate_run_arguments
+from wiggum.runner.validation import (
+    validate_git_preconditions,
+    validate_run_arguments,
+    validate_run_options,
+)
 from wiggum.tool_output_monitor import read_tool_output_monitor
 
 
@@ -61,7 +66,7 @@ def _run(
     api_retry_count: int | None,
     api_retry_interval_sec: int,
     codex_timeout_sec: int,
-    tasks_path: Path,
+    paths: RalphPaths,
     logs_dir: Path,
     temp_dir: Path,
     uv_cache_dir: Path,
@@ -117,8 +122,8 @@ def _run(
         Seconds to wait between agent API retry attempts.
     codex_timeout_sec : int
         Maximum time to wait for each agent child process.
-    tasks_path : Path
-        Ralph task ledger file.
+    paths : RalphPaths
+        Resolved Ralph file paths.
     logs_dir : Path
         Directory that stores loop logs.
     temp_dir : Path
@@ -148,8 +153,7 @@ def _run(
         lean=lean,
         auto_approve=auto_approve,
         prompt_path=prompt_path,
-        repo=repo,
-        tasks_path=tasks_path,
+        paths=paths,
     )
     if argument_error is not None:
         logger.error("{}", argument_error)
@@ -168,17 +172,17 @@ def _run(
     prompt = (
         prompt_path.read_text(encoding="utf-8")
         if prompt_path is not None
-        else default_prompt_text()
+        else default_prompt_text(paths, repo)
     )
     temp_dir.mkdir(parents=True, exist_ok=True)
     logs_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        incomplete_tasks, total_tasks, selected_task_id = task_snapshot(tasks_path)
+        incomplete_tasks, total_tasks, selected_task_id = task_snapshot(paths.tasks)
         selected_task_contract = (
             None
             if selected_task_id is None
-            else read_task_contract(tasks_path, selected_task_id)
+            else read_task_contract(paths.tasks, selected_task_id)
         )
     except (OSError, UnicodeError, ValueError) as error:
         logger.error("{}", error)
@@ -196,11 +200,11 @@ def _run(
     for loop_number in range(1, max_loops + 1):
         if loop_number > 1:
             try:
-                incomplete_tasks, _, selected_task_id = task_snapshot(tasks_path)
+                incomplete_tasks, _, selected_task_id = task_snapshot(paths.tasks)
                 selected_task_contract = (
                     None
                     if selected_task_id is None
-                    else read_task_contract(tasks_path, selected_task_id)
+                    else read_task_contract(paths.tasks, selected_task_id)
                 )
             except (OSError, UnicodeError, ValueError) as error:
                 logger.error("{}", error)
@@ -248,6 +252,8 @@ def _run(
             prompt,
             selected_task_id,
             selected_task_contract,
+            paths,
+            repo,
         )
         temporary_log_path = create_running_log(logs_dir, started_at, selected_task_id)
         if selected_task_id is not None:
@@ -393,7 +399,7 @@ def _run(
                 return ExitCode.GIT_STATE_ERROR
             log_path = finalize_log(temporary_log_path, logs_dir, started_at, task_id, status)
             try:
-                incomplete_tasks, _, next_task_id = task_snapshot(tasks_path)
+                incomplete_tasks, _, next_task_id = task_snapshot(paths.tasks)
             except (OSError, UnicodeError, ValueError) as error:
                 logger.error("{}", error)
                 return ExitCode.PREFLIGHT_ERROR
@@ -450,7 +456,6 @@ def run(
     api_retry_count: int | None = DEFAULT_API_RETRY_COUNT,
     api_retry_interval_sec: int = DEFAULT_API_RETRY_INTERVAL_SEC,
     codex_timeout_sec: int = DEFAULT_CODEX_TIMEOUT_SEC,
-    tasks_path: Path | None = None,
     logs_dir: Path | None = None,
     temp_dir: Path | None = None,
     uv_cache_dir: Path | None = None,
@@ -507,8 +512,6 @@ def run(
         Seconds to wait between agent API retry attempts.
     codex_timeout_sec : int, default 1800
         Maximum time to wait for each agent child process.
-    tasks_path : Path | None, default None
-        Ralph task ledger file. Defaults to ``<repo>/TASKS.json``.
     logs_dir : Path | None, default None
         Directory that stores loop logs. Defaults to ``<repo>/logs``.
     temp_dir : Path | None, default None
@@ -531,14 +534,34 @@ def run(
     ExitCode
         Runner outcome.
     """
-    repo = Path(repo)
-    resolved_executable = executable
-    if resolved_executable is None:
-        resolved_executable = (
-            codex_executable if provider == "codex" else DEFAULT_EXECUTABLES.get(provider, provider)
-        )
+    repo = Path(repo).resolve()
     logger.info("Ralph runner start")
     try:
+        option_error = validate_run_options(
+            max_loops=max_loops,
+            api_retry_count=api_retry_count,
+            api_retry_interval_sec=api_retry_interval_sec,
+            codex_timeout_sec=codex_timeout_sec,
+            reasoning_effort=reasoning_effort,
+            model_verbosity=model_verbosity,
+            tool_output_token_limit=tool_output_token_limit,
+            provider=provider,
+            lean=lean,
+            auto_approve=auto_approve,
+        )
+        if option_error is not None:
+            logger.error("{}", option_error)
+            return ExitCode.PREFLIGHT_ERROR
+        try:
+            paths = load_ralph_paths(repo)
+        except ConfigurationError as error:
+            logger.error("{}", error)
+            return ExitCode.PREFLIGHT_ERROR
+        resolved_executable = executable
+        if resolved_executable is None:
+            resolved_executable = (
+                codex_executable if provider == "codex" else DEFAULT_EXECUTABLES.get(provider, provider)
+            )
         return _run(
             repo=repo,
             prompt_path=prompt_path,
@@ -555,7 +578,7 @@ def run(
             api_retry_count=api_retry_count,
             api_retry_interval_sec=api_retry_interval_sec,
             codex_timeout_sec=codex_timeout_sec,
-            tasks_path=tasks_path if tasks_path is not None else repo / "TASKS.json",
+            paths=paths,
             logs_dir=logs_dir if logs_dir is not None else repo / "logs",
             temp_dir=temp_dir if temp_dir is not None else repo / "tmp",
             uv_cache_dir=uv_cache_dir if uv_cache_dir is not None else repo / ".uv-cache",

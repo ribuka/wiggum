@@ -10,20 +10,19 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from wiggum.config import RalphPaths
 from wiggum.defaults import MODEL_VERBOSITIES
 from wiggum.git_ops import require_clean_worktree, require_git_output
 from wiggum.providers import REASONING_EFFORTS, validate_provider_options
 
 
-def _validate_required_files(repo: Path, tasks_path: Path) -> str | None:
+def _validate_required_files(paths: RalphPaths) -> str | None:
     """Return a preflight error for a missing required repository file.
 
     Parameters
     ----------
-    repo : Path
-        Git repository root containing the project configuration.
-    tasks_path : Path
-        Ralph task ledger selected for this run.
+    paths : RalphPaths
+        Resolved Ralph file paths selected by the required configuration.
 
     Returns
     -------
@@ -31,11 +30,78 @@ def _validate_required_files(repo: Path, tasks_path: Path) -> str | None:
         Human-readable error message, or ``None`` when every required file is
         present as a regular file.
     """
-    required_paths = (tasks_path, repo / "RALPH_PROJECT.md")
+    required_paths = (paths.tasks, paths.project, paths.progress)
     for required_path in required_paths:
         if not required_path.is_file():
             return f"Required file does not exist: {required_path}"
     return None
+
+
+def validate_run_options(
+    *,
+    max_loops: int,
+    api_retry_count: int | None,
+    api_retry_interval_sec: int,
+    codex_timeout_sec: int,
+    reasoning_effort: str,
+    model_verbosity: str,
+    tool_output_token_limit: int,
+    provider: str,
+    lean: bool,
+    auto_approve: bool,
+) -> str | None:
+    """Validate options that do not depend on repository configuration.
+
+    Parameters
+    ----------
+    max_loops : int
+        Maximum number of agent processes to start.
+    api_retry_count : int | None
+        Number of additional attempts after an agent API or protocol failure.
+    api_retry_interval_sec : int
+        Seconds to wait between agent API retry attempts.
+    codex_timeout_sec : int
+        Maximum time to wait for each agent child process.
+    reasoning_effort : str
+        Reasoning effort for each loop.
+    model_verbosity : str
+        Codex model verbosity for each loop.
+    tool_output_token_limit : int
+        Maximum tokens retained from one tool output in model history.
+    provider : str
+        Selected AI model vendor.
+    lean : bool
+        Whether to ignore user Codex configuration and reasoning summaries.
+    auto_approve : bool
+        Whether to automatically approve agent requests.
+
+    Returns
+    -------
+    str | None
+        Human-readable error message, or ``None`` for valid options.
+    """
+    if max_loops < 1:
+        return "--max-loops must be at least 1"
+    if api_retry_count is not None and api_retry_count < 0:
+        return "--api-retry-count must be at least 0"
+    if api_retry_interval_sec < 0:
+        return "--api-retry-interval-sec must be at least 0"
+    if codex_timeout_sec < 1:
+        return "--codex-timeout-sec must be at least 1"
+    if reasoning_effort not in REASONING_EFFORTS:
+        return f"--reasoning-effort has an unsupported value: {reasoning_effort}"
+    if model_verbosity not in MODEL_VERBOSITIES:
+        return f"--model-verbosity has an unsupported value: {model_verbosity}"
+    if tool_output_token_limit < 1:
+        return "--tool-output-token-limit must be at least 1"
+    return validate_provider_options(
+        provider,
+        reasoning_effort=reasoning_effort,
+        model_verbosity=model_verbosity,
+        tool_output_token_limit=tool_output_token_limit,
+        lean=lean,
+        auto_approve=auto_approve,
+    )
 
 
 def validate_run_arguments(
@@ -51,8 +117,7 @@ def validate_run_arguments(
     lean: bool,
     auto_approve: bool,
     prompt_path: Path | None,
-    repo: Path,
-    tasks_path: Path,
+    paths: RalphPaths,
 ) -> str | None:
     """Validate runner arguments and required files before any loop starts.
 
@@ -83,10 +148,8 @@ def validate_run_arguments(
     prompt_path : Path | None
         UTF-8 prompt file used for every loop, or ``None`` to use wiggum's
         bundled default prompt.
-    repo : Path
-        Git repository to modify.
-    tasks_path : Path
-        Ralph task ledger file.
+    paths : RalphPaths
+        Resolved Ralph file paths.
 
     Returns
     -------
@@ -94,33 +157,23 @@ def validate_run_arguments(
         Human-readable error message, or ``None`` when every argument and
         required file is valid.
     """
-    if max_loops < 1:
-        return "--max-loops must be at least 1"
-    if api_retry_count is not None and api_retry_count < 0:
-        return "--api-retry-count must be at least 0"
-    if api_retry_interval_sec < 0:
-        return "--api-retry-interval-sec must be at least 0"
-    if codex_timeout_sec < 1:
-        return "--codex-timeout-sec must be at least 1"
-    if reasoning_effort not in REASONING_EFFORTS:
-        return f"--reasoning-effort has an unsupported value: {reasoning_effort}"
-    if model_verbosity not in MODEL_VERBOSITIES:
-        return f"--model-verbosity has an unsupported value: {model_verbosity}"
-    if tool_output_token_limit < 1:
-        return "--tool-output-token-limit must be at least 1"
-    provider_option_error = validate_provider_options(
-        provider,
+    option_error = validate_run_options(
+        max_loops=max_loops,
+        api_retry_count=api_retry_count,
+        api_retry_interval_sec=api_retry_interval_sec,
+        codex_timeout_sec=codex_timeout_sec,
         reasoning_effort=reasoning_effort,
         model_verbosity=model_verbosity,
         tool_output_token_limit=tool_output_token_limit,
+        provider=provider,
         lean=lean,
         auto_approve=auto_approve,
     )
-    if provider_option_error is not None:
-        return provider_option_error
+    if option_error is not None:
+        return option_error
     if prompt_path is not None and not prompt_path.is_file():
         return f"Prompt file does not exist: {prompt_path}"
-    return _validate_required_files(repo, tasks_path)
+    return _validate_required_files(paths)
 
 
 def validate_git_preconditions(repo: Path) -> str | None:

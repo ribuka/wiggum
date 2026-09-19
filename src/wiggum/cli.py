@@ -35,12 +35,6 @@ def _add_run_arguments(parser: argparse.ArgumentParser) -> None:
     """
     parser.add_argument("--repo", type=Path, default=Path.cwd())
     parser.add_argument(
-        "--tasks-file",
-        type=Path,
-        default=None,
-        help="Ralph task ledger; defaults to <repo>/TASKS.json",
-    )
-    parser.add_argument(
         "--prompt-file",
         type=Path,
         default=None,
@@ -241,7 +235,6 @@ def _run_command(args: argparse.Namespace) -> ExitCode:
         api_retry_count=args.api_retry_count,
         api_retry_interval_sec=args.api_retry_interval_sec,
         codex_timeout_sec=args.codex_timeout_sec,
-        tasks_path=args.tasks_file,
         logs_dir=args.logs_dir,
         temp_dir=args.temp_dir,
         uv_cache_dir=args.uv_cache_dir,

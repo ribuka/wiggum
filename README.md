@@ -28,23 +28,32 @@ uv add git+https://github.com/ribuka/wiggum.git
 uv run wiggum init
 ```
 
-このコマンドは対象リポジトリに `RALPH_PROJECT.md`、`ralph_prompt.md`、`TASKS.json` を
-作成します（`--repo` の既定値はカレントディレクトリです）。Ralph の共通ルールは
-wiggum に同梱されています。ループを実行する前に、プロジェクトに合わせて
-`RALPH_PROJECT.md` と `TASKS.json` を編集してください。既存のファイルを上書きするには
-`--force` を使用します。
+このコマンドは対象リポジトリの `wiggum/` 配下に `config.toml`、`RALPH_PROJECT.md`、
+`TASKS.json`、`PROGRESS.md` を作成します（`--repo` の既定値はカレントディレクトリです）。
+Ralph の共通ルールは wiggum に同梱されています。ループを実行する前に、プロジェクトに
+合わせて `wiggum/RALPH_PROJECT.md` と `wiggum/TASKS.json` を編集してください。既存の
+ファイルを上書きするには `--force` を使用します。
 
-#### リポジトリルートのファイル
+#### Ralph ファイルの設定
 
-標準の `wiggum run` コマンドでは、対象リポジトリに次のファイルが必要です。
+`wiggum run` は必ず対象リポジトリの `wiggum/config.toml` を読みます。設定ファイルが
+ない場合は preflight error で終了します。既定の設定と配置は次のとおりです。
+
+```toml
+[paths]
+tasks = "wiggum/TASKS.json"
+project = "wiggum/RALPH_PROJECT.md"
+progress = "wiggum/PROGRESS.md"
+```
+
+`[paths]` の全項目は必須で、対象リポジトリ内の相対パスを指定します。設定された
+タスク台帳、プロジェクト指示、進捗記録の3ファイルはすべて必要です。
 
 - `.git/` — リポジトリのメタデータ。`--repo` にはこの Git ルートを指定します。
-- `TASKS.json` — `--tasks-file` で別のパスを指定しない場合のタスク台帳です。
-- `RALPH_PROJECT.md` — 検証コマンドと各ループで読むファイルを含む、リポジトリ固有の指示です。
 
 対象リポジトリに `RALPH.md` は不要です。Ralph の共通ルールは wiggum が提供します。
 `ralph_prompt.md` は任意であり、`--prompt-file` で指定した場合のみ使用されます。
-`SPEC.md` や `AGENTS.md` など、`RALPH_PROJECT.md` が読むよう指定するファイルは、その設定で
+`SPEC.md` や `AGENTS.md` など、設定されたプロジェクト指示ファイルが読むよう指定するファイルは、その設定で
 指定されている場合にのみ必要です。
 
 ### Ralph ループの実行
@@ -57,7 +66,6 @@ uv run wiggum run
 主なオプション:
 
 - `--repo PATH` — 操作対象のリポジトリ（既定値: カレントディレクトリ）。
-- `--tasks-file PATH` — タスク台帳（既定値: `<repo>/TASKS.json`）。
 - `--prompt-file PATH` — 各ループでエージェントに渡すプロンプト（既定値: wiggum 同梱の Ralph ループプロンプト）。
 - `--logs-dir PATH` / `--temp-dir PATH` / `--uv-cache-dir PATH` — ループログ、一時ファイル、uv キャッシュの出力先を上書きします。
 - `--no-managed-env` — 子プロセスに `UV_CACHE_DIR`、`TMP`、`TEMP` を設定しません。
@@ -162,25 +170,35 @@ uv add git+https://github.com/ribuka/wiggum.git
 uv run wiggum init
 ```
 
-This writes `RALPH_PROJECT.md`, `ralph_prompt.md`, and `TASKS.json` into the
-target repository (`--repo` defaults to the current directory). The general
-Ralph rules are bundled with wiggum. Edit
-`RALPH_PROJECT.md` and `TASKS.json` to match your project before running loops.
-Use `--force` to overwrite files that already exist.
+This writes `config.toml`, `RALPH_PROJECT.md`, `TASKS.json`, and `PROGRESS.md`
+under `wiggum/` in the target repository (`--repo` defaults to the current
+directory). The general Ralph rules are bundled with wiggum. Edit
+`wiggum/RALPH_PROJECT.md` and `wiggum/TASKS.json` to match your project before
+running loops. Use `--force` to overwrite files that already exist.
 
-### Repository-root files
+### Ralph file configuration
 
-For the standard `wiggum run` command, the target repository must contain:
+`wiggum run` always reads `wiggum/config.toml` in the target repository. A
+missing configuration is a preflight error. The default configuration is:
+
+```toml
+[paths]
+tasks = "wiggum/TASKS.json"
+project = "wiggum/RALPH_PROJECT.md"
+progress = "wiggum/PROGRESS.md"
+```
+
+Every `[paths]` key is required and must name a relative path inside the target
+repository. The configured task ledger, project instructions, and progress
+record must all exist.
 
 - `.git/` — the repository metadata; `--repo` must name this Git root.
-- `TASKS.json` — the task ledger, unless `--tasks-file` selects another path.
-- `RALPH_PROJECT.md` — repository-specific instructions, including validation
-  commands and the files each loop must read.
 
 `RALPH.md` is not required in the target repository; wiggum provides the
 general Ralph rules. `ralph_prompt.md` is optional and is only used when passed
-with `--prompt-file`. Any files named by `RALPH_PROJECT.md`, such as `SPEC.md`
-or `AGENTS.md`, are required only when that configuration says to read them.
+with `--prompt-file`. Any files named by the configured project instructions,
+such as `SPEC.md` or `AGENTS.md`, are required only when those instructions say
+to read them.
 
 ## Run Ralph loops
 
@@ -192,7 +210,6 @@ uv run wiggum run
 Useful options:
 
 - `--repo PATH` — repository to operate on (default: current directory).
-- `--tasks-file PATH` — task ledger (default: `<repo>/TASKS.json`).
 - `--prompt-file PATH` — prompt passed to the agent for each loop (default:
   wiggum's bundled Ralph loop prompt).
 - `--logs-dir PATH` / `--temp-dir PATH` / `--uv-cache-dir PATH` — override

@@ -13,14 +13,14 @@ formats, fixtures, runner behavior, and Git operations.
 
 At the start of each loop, read the following files one at a time in this order:
 
-1. `RALPH_PROJECT.md`
+1. `{{project_path}}`
 2. `AGENTS.md` <!-- TODO: add or remove repository instruction files -->
 3. `SPEC.md` <!-- TODO: replace with this project's specification, or remove -->
-4. `PROGRESS.md` if it exists
+4. `{{progress_path}}`
 5. Existing code and tests related to the selected task
 
 The runner supplies the complete selected task contract in the prompt. Do not
-read `TASKS.json` for task selection or requirements; read it only to update the
+read `{{tasks_path}}` for task selection or requirements; read it only to update the
 selected task's status. Do not search the repository for Ralph instructions
 before reading the files listed above. Begin with implementation and test files
 directly required by that task. Expand to imported or dependent files only when
@@ -28,13 +28,13 @@ needed to understand an active contract or failure. Do not preload files for
 later tasks, and do not read a guessed path that was absent from file-search
 results.
 
-`SPEC.md` defines the product specification, `TASKS.json` is the task ledger, and
-`PROGRESS.md` is the append-only loop record. Do not invent requirements that
+`SPEC.md` defines the product specification, `{{tasks_path}}` is the task ledger, and
+`{{progress_path}}` is the append-only loop record. Do not invent requirements that
 these files do not define.
 
 ## Task ledger and selection
 
-Each task in `TASKS.json` is an object with these required keys:
+Each task in `{{tasks_path}}` is an object with these required keys:
 
 * `id`: a unique `TASK-XXX` identifier
 * `title`: a non-empty task title
@@ -52,7 +52,7 @@ Apply the general selection rules as follows:
 3. Select the task with the lowest `priority` value.
 4. If multiple tasks have the same priority, select the lowest `TASK-XXX` ID.
 
-In `TASKS.json`, normally change only the selected task's `status`. Do not change
+In `{{tasks_path}}`, normally change only the selected task's `status`. Do not change
 requirements, tests, dependencies, or priority during a loop.
 
 ## Tests and acceptance commands
@@ -90,7 +90,7 @@ Review the files changed in the loop and confirm that:
 
 ## Progress updates
 
-Append one entry to `PROGRESS.md` for every task loop using this format:
+Append one entry to `{{progress_path}}` for every task loop using this format:
 
 ```markdown
 ## YYYY-MM-DD HH:MM - TASK-XXX
@@ -102,8 +102,8 @@ Append one entry to `PROGRESS.md` for every task loop using this format:
 - Notes: Information required by the next loop
 ```
 
-If new work is discovered, do not add it to `TASKS.json` without approval. Record
-it as a candidate task in `PROGRESS.md`.
+If new work is discovered, do not add it to `{{tasks_path}}` without approval. Record
+it as a candidate task in `{{progress_path}}`.
 
 ## Automated runner
 
@@ -119,7 +119,7 @@ Run `uv run wiggum run --help` for available options and exit codes.
 ## Git and external operations
 
 * Each loop with repository changes must create exactly one commit containing
-  only files changed in that loop, including `TASKS.json` and `PROGRESS.md` updates.
+  only files changed in that loop, including `{{tasks_path}}` and `{{progress_path}}` updates.
 * The runner starts only from a clean working tree, stages the loop changes,
   checks unstaged and staged diffs for whitespace errors, and creates the
   commit. Codex must review its diff but must not stage or commit it.
@@ -127,7 +127,7 @@ Run `uv run wiggum run --help` for available options and exit codes.
   description.
 * Preserved incomplete or blocked work is committed as
   `wip(TASK-XXX): Ralph loop changes`, with failures and remaining work recorded
-  in `PROGRESS.md`.
+  in `{{progress_path}}`.
 * Do not create an empty commit when a loop makes no file changes.
 * Do not push, pull, publish, or deploy.
 * Do not perform destructive operations or write outside the repository.
