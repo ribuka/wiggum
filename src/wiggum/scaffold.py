@@ -5,10 +5,13 @@ from __future__ import annotations
 from importlib import resources
 from pathlib import Path
 
+from wiggum.config import CONFIG_PATH, DEFAULT_PATHS
+
 _TEMPLATE_FILES: dict[str, str] = {
-    "RALPH_PROJECT.md": "RALPH_PROJECT.md.template",
-    "ralph_prompt.md": "ralph_prompt.md",
-    "TASKS.json": "TASKS.json.template",
+    str(CONFIG_PATH): "config.toml.template",
+    str(DEFAULT_PATHS["project"]): "RALPH_PROJECT.md.template",
+    str(DEFAULT_PATHS["tasks"]): "TASKS.json.template",
+    str(DEFAULT_PATHS["progress"]): "PROGRESS.md.template",
 }
 
 
@@ -46,6 +49,9 @@ def scaffold(repo: Path, *, force: bool = False) -> list[Path]:
         destination = destinations[destination_name]
         destination.parent.mkdir(parents=True, exist_ok=True)
         content = (templates_root / template_name).read_text(encoding="utf-8")
+        content = content.replace("{{project_path}}", DEFAULT_PATHS["project"].as_posix())
+        content = content.replace("{{tasks_path}}", DEFAULT_PATHS["tasks"].as_posix())
+        content = content.replace("{{progress_path}}", DEFAULT_PATHS["progress"].as_posix())
         destination.write_text(content, encoding="utf-8")
         written.append(destination)
     return written

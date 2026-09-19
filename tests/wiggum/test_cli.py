@@ -17,7 +17,6 @@ def test_parse_args_run_defaults_to_the_current_directory() -> None:
 
     assert args.command == "run"
     assert args.repo == Path.cwd()
-    assert args.tasks_file is None
     assert args.prompt_file is None
     assert args.logs_dir is None
     assert args.temp_dir is None
@@ -56,6 +55,12 @@ def test_parse_args_run_rejects_an_unsupported_provider() -> None:
     """Reject a --provider value outside the supported choices."""
     with pytest.raises(SystemExit):
         _parse_args(["run", "--provider", "unsupported"])
+
+
+def test_parse_args_run_rejects_removed_tasks_file_option() -> None:
+    """Reject the removed task-ledger path override."""
+    with pytest.raises(SystemExit):
+        _parse_args(["run", "--tasks-file", "custom.json"])
 
 
 def test_parse_args_run_accepts_token_saving_controls() -> None:

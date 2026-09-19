@@ -24,7 +24,17 @@ def _write_project_configuration(tmp_path: Path) -> None:
     tmp_path : Path
         Per-test temporary repository.
     """
-    (tmp_path / "RALPH_PROJECT.md").write_text("project instructions\n", encoding="utf-8")
+    ralph_dir = tmp_path / "wiggum"
+    ralph_dir.mkdir()
+    (ralph_dir / "config.toml").write_text(
+        "[paths]\n"
+        'tasks = "wiggum/TASKS.json"\n'
+        'project = "wiggum/RALPH_PROJECT.md"\n'
+        'progress = "wiggum/PROGRESS.md"\n',
+        encoding="utf-8",
+    )
+    (ralph_dir / "RALPH_PROJECT.md").write_text("project instructions\n", encoding="utf-8")
+    (ralph_dir / "PROGRESS.md").write_text("progress\n", encoding="utf-8")
 
 
 def _write_tasks(path: Path, tasks: list[dict[str, object]]) -> None:
@@ -88,14 +98,14 @@ def _configure_dry_run(monkeypatch: pytest.MonkeyPatch, repo: Path) -> None:
     monkeypatch.setattr(validation_module, "require_clean_worktree", lambda repo: None)
 
 
-def test_run_defaults_to_tasks_json_and_injects_only_selected_contract(
+def test_run_uses_configured_tasks_path_and_injects_only_selected_contract(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Use ``TASKS.json`` and keep unselected contracts out of the prompt."""
+    """Use configured tasks and keep unselected contracts out of the prompt."""
     _write_tasks(
-        tmp_path / "TASKS.json",
+        tmp_path / "wiggum" / "TASKS.json",
         [_task("TASK-001", priority=2, title="Later"), _task("TASK-002", priority=1, title="Selected")],
     )
     _configure_dry_run(monkeypatch, tmp_path)
@@ -106,23 +116,31 @@ def test_run_defaults_to_tasks_json_and_injects_only_selected_contract(
     assert "The parent runner selected `TASK-002`" in output
     assert '"title": "Selected"' in output
     assert '"title": "Later"' not in output
-    assert "Do not read `TASKS.json` to select a task" in output
+    assert "Do not read `wiggum/TASKS.json` to select a task" in output
 
 
-def test_run_accepts_an_explicit_tasks_file(
+def test_run_uses_custom_tasks_path_from_configuration(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    """Allow callers to select a JSON ledger outside the default path."""
-    ledger = tmp_path / "custom.json"
+    """Load a JSON ledger selected only by repository configuration."""
+    ledger = tmp_path / "planning" / "tasks.json"
+    ledger.parent.mkdir()
+    (tmp_path / "wiggum" / "config.toml").write_text(
+        "[paths]\n"
+        'tasks = "planning/tasks.json"\n'
+        'project = "wiggum/RALPH_PROJECT.md"\n'
+        'progress = "wiggum/PROGRESS.md"\n',
+        encoding="utf-8",
+    )
     _write_tasks(ledger, [_task("TASK-001")])
     _configure_dry_run(monkeypatch, tmp_path)
 
-    assert run(repo=tmp_path, tasks_path=ledger, dry_run=True) == ExitCode.SUCCESS
+    assert run(repo=tmp_path, dry_run=True) == ExitCode.SUCCESS
 
 
-def test_run_reports_missing_default_tasks_json_as_preflight_error(tmp_path: Path) -> None:
-    """Reject an absent default JSON ledger before external dependencies."""
+def test_run_reports_missing_configured_tasks_json_as_preflight_error(tmp_path: Path) -> None:
+    """Reject an absent configured JSON ledger before external dependencies."""
     assert run(repo=tmp_path) == ExitCode.PREFLIGHT_ERROR
 
 
@@ -131,7 +149,7 @@ def test_run_reports_invalid_json_as_preflight_error(
     tmp_path: Path,
 ) -> None:
     """Turn invalid JSON into a runner preflight failure."""
-    (tmp_path / "TASKS.json").write_text("{", encoding="utf-8")
+    (tmp_path / "wiggum" / "TASKS.json").write_text("{", encoding="utf-8")
     _configure_dry_run(monkeypatch, tmp_path)
 
     assert run(repo=tmp_path, dry_run=True) == ExitCode.PREFLIGHT_ERROR
@@ -142,7 +160,7 @@ def test_run_reports_invalid_utf8_as_preflight_error(
     tmp_path: Path,
 ) -> None:
     """Turn an unreadable UTF-8 ledger into a runner preflight failure."""
-    (tmp_path / "TASKS.json").write_bytes(b"\xff")
+    (tmp_path / "wiggum" / "TASKS.json").write_bytes(b"\xff")
     _configure_dry_run(monkeypatch, tmp_path)
 
     assert run(repo=tmp_path, dry_run=True) == ExitCode.PREFLIGHT_ERROR
@@ -154,7 +172,7 @@ def test_run_dry_run_builds_a_claude_command(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Print a Claude Code command for --provider claude in a dry run."""
-    _write_tasks(tmp_path / "TASKS.json", [_task("TASK-001")])
+    _write_tasks(tmp_path / "wiggum" / "TASKS.json", [_task("TASK-001")])
     monkeypatch.setattr(
         claude_provider_module,
         "resolve_claude_executable",

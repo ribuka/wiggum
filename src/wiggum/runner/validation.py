@@ -10,20 +10,19 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from wiggum.config import RalphPaths
 from wiggum.defaults import MODEL_VERBOSITIES
 from wiggum.git_ops import require_clean_worktree, require_git_output
 from wiggum.providers import REASONING_EFFORTS, validate_provider_options
 
 
-def _validate_required_files(repo: Path, tasks_path: Path) -> str | None:
+def _validate_required_files(paths: RalphPaths) -> str | None:
     """Return a preflight error for a missing required repository file.
 
     Parameters
     ----------
-    repo : Path
-        Git repository root containing the project configuration.
-    tasks_path : Path
-        Ralph task ledger selected for this run.
+    paths : RalphPaths
+        Resolved Ralph file paths selected by the required configuration.
 
     Returns
     -------
@@ -31,14 +30,14 @@ def _validate_required_files(repo: Path, tasks_path: Path) -> str | None:
         Human-readable error message, or ``None`` when every required file is
         present as a regular file.
     """
-    required_paths = (tasks_path, repo / "RALPH_PROJECT.md")
+    required_paths = (paths.tasks, paths.project, paths.progress)
     for required_path in required_paths:
         if not required_path.is_file():
             return f"Required file does not exist: {required_path}"
     return None
 
 
-def validate_run_arguments(
+def validate_run_options(
     *,
     max_loops: int,
     api_retry_count: int | None,
@@ -50,19 +49,15 @@ def validate_run_arguments(
     provider: str,
     lean: bool,
     auto_approve: bool,
-    prompt_path: Path | None,
-    repo: Path,
-    tasks_path: Path,
 ) -> str | None:
-    """Validate runner arguments and required files before any loop starts.
+    """Validate options that do not depend on repository configuration.
 
     Parameters
     ----------
     max_loops : int
         Maximum number of agent processes to start.
     api_retry_count : int | None
-        Number of additional attempts after an agent API or protocol
-        failure. ``None`` disables retries.
+        Number of additional attempts after an agent API or protocol failure.
     api_retry_interval_sec : int
         Seconds to wait between agent API retry attempts.
     codex_timeout_sec : int
@@ -74,25 +69,16 @@ def validate_run_arguments(
     tool_output_token_limit : int
         Maximum tokens retained from one tool output in model history.
     provider : str
-        Selected AI model vendor; one of :data:`wiggum.providers.PROVIDERS`.
+        Selected AI model vendor.
     lean : bool
         Whether to ignore user Codex configuration and reasoning summaries.
     auto_approve : bool
-        Automatically approve agent requests instead of requiring
-        interactive confirmation.
-    prompt_path : Path | None
-        UTF-8 prompt file used for every loop, or ``None`` to use wiggum's
-        bundled default prompt.
-    repo : Path
-        Git repository to modify.
-    tasks_path : Path
-        Ralph task ledger file.
+        Whether to automatically approve agent requests.
 
     Returns
     -------
     str | None
-        Human-readable error message, or ``None`` when every argument and
-        required file is valid.
+        Human-readable error message, or ``None`` for valid options.
     """
     if max_loops < 1:
         return "--max-loops must be at least 1"
@@ -108,7 +94,7 @@ def validate_run_arguments(
         return f"--model-verbosity has an unsupported value: {model_verbosity}"
     if tool_output_token_limit < 1:
         return "--tool-output-token-limit must be at least 1"
-    provider_option_error = validate_provider_options(
+    return validate_provider_options(
         provider,
         reasoning_effort=reasoning_effort,
         model_verbosity=model_verbosity,
@@ -116,11 +102,31 @@ def validate_run_arguments(
         lean=lean,
         auto_approve=auto_approve,
     )
-    if provider_option_error is not None:
-        return provider_option_error
+
+
+def validate_run_arguments(
+    *,
+    prompt_path: Path | None,
+    paths: RalphPaths,
+) -> str | None:
+    """Validate file arguments and required files before any loop starts.
+
+    Parameters
+    ----------
+    prompt_path : Path | None
+        UTF-8 prompt file used for every loop, or ``None`` to use wiggum's
+        bundled default prompt.
+    paths : RalphPaths
+        Resolved Ralph file paths.
+
+    Returns
+    -------
+    str | None
+        Human-readable error message, or ``None`` when every file is valid.
+    """
     if prompt_path is not None and not prompt_path.is_file():
         return f"Prompt file does not exist: {prompt_path}"
-    return _validate_required_files(repo, tasks_path)
+    return _validate_required_files(paths)
 
 
 def validate_git_preconditions(repo: Path) -> str | None:
