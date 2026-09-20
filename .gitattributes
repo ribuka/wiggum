@@ -1,5 +1,6 @@
 /.github/ export-ignore
 /AGENTS.md export-ignore
+/CLAUDE.md export-ignore
 /tests/ export-ignore
 /docs/ export-ignore
 /.gitattributes export-ignore
