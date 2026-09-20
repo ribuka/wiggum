@@ -110,7 +110,7 @@ def test_run_uses_configured_tasks_path_and_injects_only_selected_contract(
     )
     _configure_dry_run(monkeypatch, tmp_path)
 
-    assert run(repo=tmp_path, dry_run=True) == ExitCode.SUCCESS
+    assert run(repo=tmp_path, provider="codex", dry_run=True) == ExitCode.SUCCESS
 
     output = capsys.readouterr().out
     assert "The parent runner selected `TASK-002`" in output
@@ -136,12 +136,12 @@ def test_run_uses_custom_tasks_path_from_configuration(
     _write_tasks(ledger, [_task("TASK-001")])
     _configure_dry_run(monkeypatch, tmp_path)
 
-    assert run(repo=tmp_path, dry_run=True) == ExitCode.SUCCESS
+    assert run(repo=tmp_path, provider="codex", dry_run=True) == ExitCode.SUCCESS
 
 
 def test_run_reports_missing_configured_tasks_json_as_preflight_error(tmp_path: Path) -> None:
     """Reject an absent configured JSON ledger before external dependencies."""
-    assert run(repo=tmp_path) == ExitCode.PREFLIGHT_ERROR
+    assert run(repo=tmp_path, provider="codex") == ExitCode.PREFLIGHT_ERROR
 
 
 def test_run_reports_invalid_json_as_preflight_error(
@@ -152,7 +152,7 @@ def test_run_reports_invalid_json_as_preflight_error(
     (tmp_path / "wiggum" / "TASKS.json").write_text("{", encoding="utf-8")
     _configure_dry_run(monkeypatch, tmp_path)
 
-    assert run(repo=tmp_path, dry_run=True) == ExitCode.PREFLIGHT_ERROR
+    assert run(repo=tmp_path, provider="codex", dry_run=True) == ExitCode.PREFLIGHT_ERROR
 
 
 def test_run_reports_invalid_utf8_as_preflight_error(
@@ -163,7 +163,7 @@ def test_run_reports_invalid_utf8_as_preflight_error(
     (tmp_path / "wiggum" / "TASKS.json").write_bytes(b"\xff")
     _configure_dry_run(monkeypatch, tmp_path)
 
-    assert run(repo=tmp_path, dry_run=True) == ExitCode.PREFLIGHT_ERROR
+    assert run(repo=tmp_path, provider="codex", dry_run=True) == ExitCode.PREFLIGHT_ERROR
 
 
 def test_run_dry_run_builds_a_claude_command(

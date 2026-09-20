@@ -26,12 +26,7 @@ from wiggum.git_ops import (
 from wiggum.ledger.protocol import classify_output, validate_selected_task
 from wiggum.ledger.task_ledger import read_task_contract, task_snapshot
 from wiggum.logging.loop_log import create_running_log, finalize_log
-from wiggum.providers import (
-    DEFAULT_PROVIDER,
-    CommandOptions,
-    get_adapter,
-    validate_provider_options,
-)
+from wiggum.providers import CommandOptions, get_adapter, validate_provider_options
 from wiggum.providers.usage.token_usage import TokenUsage
 from wiggum.runner.prompt import default_prompt_text, prompt_for_selected_task
 from wiggum.runner.validation import (
@@ -425,7 +420,7 @@ def _run(
 
 def run(
     repo: Path,
-    provider: str = DEFAULT_PROVIDER,
+    provider: str,
     model: str | None = None,
     reasoning_effort: str = DEFAULT_REASONING_EFFORT,
     max_loops: int = DEFAULT_MAX_LOOPS,
@@ -442,8 +437,9 @@ def run(
     ----------
     repo : Path
         Git repository to modify.
-    provider : str, default "codex"
+    provider : str
         Selected AI model vendor; one of :data:`wiggum.providers.PROVIDERS`.
+        No default; the caller must choose explicitly.
     model : str | None, default None
         Optional model override.
     reasoning_effort : str, default "medium"
