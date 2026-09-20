@@ -10,7 +10,6 @@ on:
 
 jobs:
   release:
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
 
     permissions:
@@ -64,13 +63,3 @@ jobs:
             "$TAG" \
             --title "$TAG" \
             --generate-notes
-
-      - name: Build distribution packages
-        run: uv build
-
-      - name: Upload distribution packages
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          TAG="${{ steps.version.outputs.tag }}"
-          gh release upload "$TAG" dist/* --clobber
