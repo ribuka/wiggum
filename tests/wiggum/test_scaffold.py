@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from wiggum.config import load_configuration
 from wiggum.scaffold import scaffold
 
 
@@ -25,6 +26,17 @@ def test_scaffold_writes_all_template_files(tmp_path: Path) -> None:
         assert path.read_text(encoding="utf-8").strip() != ""
     assert json.loads((tmp_path / "wiggum" / "TASKS.json").read_text(encoding="utf-8"))["tasks"]
     assert "wiggum/TASKS.json" in (tmp_path / "wiggum" / "config.toml").read_text(encoding="utf-8")
+
+
+def test_scaffold_writes_a_config_toml_that_load_configuration_can_parse(tmp_path: Path) -> None:
+    """Parse the scaffolded config.toml, including its [dir] and [run] tables, without error."""
+    scaffold(tmp_path)
+
+    configuration = load_configuration(tmp_path)
+
+    assert configuration.paths.tasks == tmp_path / "wiggum" / "TASKS.json"
+    assert configuration.dirs.log == tmp_path / "logs"
+    assert configuration.run.agent_timeout_sec == 1800
 
 
 def test_scaffold_refuses_to_overwrite_existing_files_by_default(tmp_path: Path) -> None:

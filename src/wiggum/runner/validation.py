@@ -11,9 +11,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from wiggum.config import RalphPaths
-from wiggum.defaults import MODEL_VERBOSITIES
 from wiggum.git_ops import require_clean_worktree, require_git_output
-from wiggum.providers import REASONING_EFFORTS, validate_provider_options
+from wiggum.providers import REASONING_EFFORTS
 
 
 def _validate_required_files(paths: RalphPaths) -> str | None:
@@ -37,43 +36,21 @@ def _validate_required_files(paths: RalphPaths) -> str | None:
     return None
 
 
-def validate_run_options(
-    *,
-    max_loops: int,
-    api_retry_count: int | None,
-    api_retry_interval_sec: int,
-    codex_timeout_sec: int,
-    reasoning_effort: str,
-    model_verbosity: str,
-    tool_output_token_limit: int,
-    provider: str,
-    lean: bool,
-    auto_approve: bool,
-) -> str | None:
-    """Validate options that do not depend on repository configuration.
+def validate_run_options(*, max_loops: int, reasoning_effort: str) -> str | None:
+    """Validate CLI-sourced options that do not depend on repository configuration.
+
+    This runs before ``wiggum/config.toml`` is loaded, so a repository whose
+    configuration is absent or invalid does not mask an invalid CLI flag.
+    Provider/``[run.codex]`` combination validation happens separately, once
+    the configuration is loaded; see
+    :func:`wiggum.providers.validate_provider_options`.
 
     Parameters
     ----------
     max_loops : int
         Maximum number of agent processes to start.
-    api_retry_count : int | None
-        Number of additional attempts after an agent API or protocol failure.
-    api_retry_interval_sec : int
-        Seconds to wait between agent API retry attempts.
-    codex_timeout_sec : int
-        Maximum time to wait for each agent child process.
     reasoning_effort : str
         Reasoning effort for each loop.
-    model_verbosity : str
-        Codex model verbosity for each loop.
-    tool_output_token_limit : int
-        Maximum tokens retained from one tool output in model history.
-    provider : str
-        Selected AI model vendor.
-    lean : bool
-        Whether to ignore user Codex configuration and reasoning summaries.
-    auto_approve : bool
-        Whether to automatically approve agent requests.
 
     Returns
     -------
@@ -82,26 +59,9 @@ def validate_run_options(
     """
     if max_loops < 1:
         return "--max-loops must be at least 1"
-    if api_retry_count is not None and api_retry_count < 0:
-        return "--api-retry-count must be at least 0"
-    if api_retry_interval_sec < 0:
-        return "--api-retry-interval-sec must be at least 0"
-    if codex_timeout_sec < 1:
-        return "--codex-timeout-sec must be at least 1"
     if reasoning_effort not in REASONING_EFFORTS:
         return f"--reasoning-effort has an unsupported value: {reasoning_effort}"
-    if model_verbosity not in MODEL_VERBOSITIES:
-        return f"--model-verbosity has an unsupported value: {model_verbosity}"
-    if tool_output_token_limit < 1:
-        return "--tool-output-token-limit must be at least 1"
-    return validate_provider_options(
-        provider,
-        reasoning_effort=reasoning_effort,
-        model_verbosity=model_verbosity,
-        tool_output_token_limit=tool_output_token_limit,
-        lean=lean,
-        auto_approve=auto_approve,
-    )
+    return None
 
 
 def validate_run_arguments(

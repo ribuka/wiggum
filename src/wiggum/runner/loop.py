@@ -10,16 +10,8 @@ from pathlib import Path
 
 from loguru import logger
 
-from wiggum.config import ConfigurationError, RalphPaths, load_ralph_paths
-from wiggum.defaults import (
-    DEFAULT_API_RETRY_COUNT,
-    DEFAULT_API_RETRY_INTERVAL_SEC,
-    DEFAULT_CODEX_TIMEOUT_SEC,
-    DEFAULT_MAX_LOOPS,
-    DEFAULT_MODEL_VERBOSITY,
-    DEFAULT_REASONING_EFFORT,
-    DEFAULT_TOOL_OUTPUT_TOKEN_LIMIT,
-)
+from wiggum.config import ConfigurationError, RalphPaths, load_configuration
+from wiggum.defaults import DEFAULT_MAX_LOOPS, DEFAULT_REASONING_EFFORT
 from wiggum.env.process_environment import (
     build_process_environment as build_codex_environment,
 )
@@ -35,10 +27,10 @@ from wiggum.ledger.protocol import classify_output, validate_selected_task
 from wiggum.ledger.task_ledger import read_task_contract, task_snapshot
 from wiggum.logging.loop_log import create_running_log, finalize_log
 from wiggum.providers import (
-    DEFAULT_EXECUTABLES,
     DEFAULT_PROVIDER,
     CommandOptions,
     get_adapter,
+    validate_provider_options,
 )
 from wiggum.providers.usage.token_usage import TokenUsage
 from wiggum.runner.prompt import default_prompt_text, prompt_for_selected_task
@@ -65,7 +57,7 @@ def _run(
     dry_run: bool,
     api_retry_count: int | None,
     api_retry_interval_sec: int,
-    codex_timeout_sec: int,
+    agent_timeout_sec: int,
     paths: RalphPaths,
     logs_dir: Path,
     temp_dir: Path,
@@ -120,7 +112,7 @@ def _run(
         failure. ``None`` disables retries.
     api_retry_interval_sec : int
         Seconds to wait between agent API retry attempts.
-    codex_timeout_sec : int
+    agent_timeout_sec : int
         Maximum time to wait for each agent child process.
     paths : RalphPaths
         Resolved Ralph file paths.
@@ -267,7 +259,7 @@ def _run(
                     codex_environment,
                     codex_prompt,
                     output_path,
-                    codex_timeout_sec,
+                    agent_timeout_sec,
                 )
                 if completed.returncode != 0:
                     failure = f"{provider.capitalize()} exited with code {completed.returncode}"
@@ -279,7 +271,7 @@ def _run(
                     validate_selected_task(status, task_id, selected_task_id)
                     attempt_succeeded = True
             except subprocess.TimeoutExpired:
-                failure = f"{provider.capitalize()} timed out after {codex_timeout_sec} seconds"
+                failure = f"{provider.capitalize()} timed out after {agent_timeout_sec} seconds"
                 exit_code = ExitCode.CODEX_FAILURE
                 retryable = True
             except (OSError, UnicodeError, ValueError) as error:
@@ -433,40 +425,25 @@ def _run(
 
 def run(
     repo: Path,
-    prompt_path: Path | None = None,
-    max_loops: int = DEFAULT_MAX_LOOPS,
-    codex_executable: str = "codex",
+    provider: str = DEFAULT_PROVIDER,
     model: str | None = None,
     reasoning_effort: str = DEFAULT_REASONING_EFFORT,
-    model_verbosity: str = DEFAULT_MODEL_VERBOSITY,
-    tool_output_token_limit: int = DEFAULT_TOOL_OUTPUT_TOKEN_LIMIT,
-    lean: bool = False,
+    max_loops: int = DEFAULT_MAX_LOOPS,
     auto_approve: bool = False,
     dry_run: bool = False,
-    api_retry_count: int | None = DEFAULT_API_RETRY_COUNT,
-    api_retry_interval_sec: int = DEFAULT_API_RETRY_INTERVAL_SEC,
-    codex_timeout_sec: int = DEFAULT_CODEX_TIMEOUT_SEC,
-    logs_dir: Path | None = None,
-    temp_dir: Path | None = None,
-    uv_cache_dir: Path | None = None,
-    manage_process_env: bool = True,
-    provider: str = DEFAULT_PROVIDER,
-    executable: str | None = None,
 ) -> ExitCode:
     """Run Ralph with one pair of runner lifecycle log messages.
+
+    Every tunable other than the run-to-run choices below is read from the
+    target repository's ``wiggum/config.toml``; see :mod:`wiggum.config.dirs`
+    and :mod:`wiggum.config.run` for their schema and defaults.
 
     Parameters
     ----------
     repo : Path
         Git repository to modify.
-    prompt_path : Path | None, default None
-        UTF-8 prompt file used for every loop. Defaults to wiggum's bundled
-        Ralph loop prompt when omitted.
-    max_loops : int, default 20
-        Maximum number of agent processes to start.
-    codex_executable : str, default "codex"
-        Codex executable name or path. Kept for backward compatibility; used
-        only when ``provider`` is ``"codex"`` and ``executable`` is omitted.
+    provider : str, default "codex"
+        Selected AI model vendor; one of :data:`wiggum.providers.PROVIDERS`.
     model : str | None, default None
         Optional model override.
     reasoning_effort : str, default "medium"
@@ -478,46 +455,14 @@ def run(
         (:data:`wiggum.providers.constants.CLAUDE_REASONING_EFFORTS`)
         regardless of model; a value outside that set is rejected for the
         ``claude`` provider.
-    model_verbosity : str, default "low"
-        Codex model verbosity for each loop. Codex-only; must be left at its
-        default value for the ``copilot`` and ``claude`` providers.
-    tool_output_token_limit : int, default 12000
-        Maximum tokens retained from one tool output in model history.
-        Codex-only; must be left at its default value for the ``copilot``
-        and ``claude`` providers.
-    lean : bool, default False
-        Whether to ignore user Codex configuration and reasoning summaries.
-        Codex-only; must be ``False`` for the ``copilot`` and ``claude``
-        providers.
+    max_loops : int, default 20
+        Maximum number of agent processes to start.
     auto_approve : bool, default False
         Automatically approve agent requests instead of requiring
         interactive confirmation. Required for the ``copilot`` and ``claude``
         providers.
     dry_run : bool, default False
         Validate inputs and print the command without invoking the agent.
-    api_retry_count : int | None, default None
-        Number of additional attempts after an agent API or protocol
-        failure. ``None`` disables retries.
-    api_retry_interval_sec : int, default 5
-        Seconds to wait between agent API retry attempts.
-    codex_timeout_sec : int, default 1800
-        Maximum time to wait for each agent child process.
-    logs_dir : Path | None, default None
-        Directory that stores loop logs. Defaults to ``<repo>/logs``.
-    temp_dir : Path | None, default None
-        Directory used for loop-scoped temporary files. Defaults to
-        ``<repo>/tmp``.
-    uv_cache_dir : Path | None, default None
-        Directory used for ``UV_CACHE_DIR``. Defaults to ``<repo>/.uv-cache``.
-    manage_process_env : bool, default True
-        Whether to inject ``UV_CACHE_DIR``, ``TMP``, and ``TEMP`` into the
-        agent child process environment.
-    provider : str, default "codex"
-        Selected AI model vendor; one of :data:`wiggum.providers.PROVIDERS`.
-    executable : str | None, default None
-        Provider CLI executable name or path. Defaults to ``codex_executable``
-        for the ``codex`` provider, or to that provider's entry in
-        :data:`wiggum.providers.DEFAULT_EXECUTABLES` otherwise.
 
     Returns
     -------
@@ -527,52 +472,48 @@ def run(
     repo = Path(repo).resolve()
     logger.info("Ralph runner start")
     try:
-        option_error = validate_run_options(
-            max_loops=max_loops,
-            api_retry_count=api_retry_count,
-            api_retry_interval_sec=api_retry_interval_sec,
-            codex_timeout_sec=codex_timeout_sec,
-            reasoning_effort=reasoning_effort,
-            model_verbosity=model_verbosity,
-            tool_output_token_limit=tool_output_token_limit,
-            provider=provider,
-            lean=lean,
-            auto_approve=auto_approve,
-        )
+        option_error = validate_run_options(max_loops=max_loops, reasoning_effort=reasoning_effort)
         if option_error is not None:
             logger.error("{}", option_error)
             return ExitCode.PREFLIGHT_ERROR
         try:
-            paths = load_ralph_paths(repo)
+            configuration = load_configuration(repo)
         except ConfigurationError as error:
             logger.error("{}", error)
             return ExitCode.PREFLIGHT_ERROR
-        resolved_executable = executable
-        if resolved_executable is None:
-            resolved_executable = (
-                codex_executable if provider == "codex" else DEFAULT_EXECUTABLES.get(provider, provider)
-            )
+        run_settings = configuration.run
+        provider_error = validate_provider_options(
+            provider,
+            reasoning_effort=reasoning_effort,
+            model_verbosity=run_settings.codex.model_verbosity,
+            tool_output_token_limit=run_settings.codex.tool_output_token_limit,
+            lean=run_settings.codex.lean,
+            auto_approve=auto_approve,
+        )
+        if provider_error is not None:
+            logger.error("{}", provider_error)
+            return ExitCode.PREFLIGHT_ERROR
         return _run(
             repo=repo,
-            prompt_path=prompt_path,
+            prompt_path=configuration.paths.prompt_file,
             max_loops=max_loops,
             provider=provider,
-            executable=resolved_executable,
+            executable=run_settings.executables[provider],
             model=model,
             reasoning_effort=reasoning_effort,
-            model_verbosity=model_verbosity,
-            tool_output_token_limit=tool_output_token_limit,
-            lean=lean,
+            model_verbosity=run_settings.codex.model_verbosity,
+            tool_output_token_limit=run_settings.codex.tool_output_token_limit,
+            lean=run_settings.codex.lean,
             auto_approve=auto_approve,
             dry_run=dry_run,
-            api_retry_count=api_retry_count,
-            api_retry_interval_sec=api_retry_interval_sec,
-            codex_timeout_sec=codex_timeout_sec,
-            paths=paths,
-            logs_dir=logs_dir if logs_dir is not None else repo / "logs",
-            temp_dir=temp_dir if temp_dir is not None else repo / "tmp",
-            uv_cache_dir=uv_cache_dir if uv_cache_dir is not None else repo / ".uv-cache",
-            manage_process_env=manage_process_env,
+            api_retry_count=run_settings.api_retry_count,
+            api_retry_interval_sec=run_settings.api_retry_interval_sec,
+            agent_timeout_sec=run_settings.agent_timeout_sec,
+            paths=configuration.paths,
+            logs_dir=configuration.dirs.log,
+            temp_dir=configuration.dirs.temp,
+            uv_cache_dir=configuration.dirs.uv_cache,
+            manage_process_env=run_settings.manage_process_env,
         )
     finally:
         logger.info("Ralph runner end")

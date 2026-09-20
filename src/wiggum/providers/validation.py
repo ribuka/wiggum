@@ -35,13 +35,14 @@ def validate_provider_options(
         (:data:`wiggum.providers.constants.CLAUDE_REASONING_EFFORTS`)
         regardless of model, so a value outside that set is rejected here.
     model_verbosity : str
-        Requested model verbosity, a Codex-only inline configuration value.
+        Requested model verbosity, from the Codex-only ``[run.codex]``
+        configuration table.
     tool_output_token_limit : int
-        Requested tool-output token limit, a Codex-only inline configuration
-        value.
+        Requested tool-output token limit, from the Codex-only
+        ``[run.codex]`` configuration table.
     lean : bool
         Whether user Codex configuration and reasoning summaries should be
-        ignored; a Codex-only behavior.
+        ignored, from the Codex-only ``[run.codex]`` configuration table.
     auto_approve : bool
         Whether requests are automatically approved. Neither GitHub Copilot
         CLI nor Claude Code CLI has an interactive-approval fallback in a
@@ -60,11 +61,11 @@ def validate_provider_options(
 
     unsupported: list[str] = []
     if model_verbosity != DEFAULT_MODEL_VERBOSITY:
-        unsupported.append("--model-verbosity")
+        unsupported.append("run.codex.model_verbosity")
     if tool_output_token_limit != DEFAULT_TOOL_OUTPUT_TOKEN_LIMIT:
-        unsupported.append("--tool-output-token-limit")
+        unsupported.append("run.codex.tool_output_token_limit")
     if lean:
-        unsupported.append("--lean")
+        unsupported.append("run.codex.lean")
     if provider == CLAUDE and reasoning_effort not in CLAUDE_REASONING_EFFORTS:
         unsupported.append("--reasoning-effort")
     if unsupported:

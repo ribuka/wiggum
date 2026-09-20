@@ -2,3 +2,29 @@
 tasks = "wiggum/TASKS.json"
 project = "wiggum/RALPH_PROJECT.md"
 progress = "wiggum/PROGRESS.md"
+# prompt_file is optional; uncomment to use a custom prompt instead of
+# wiggum's bundled default.
+# prompt_file = "wiggum/ralph_prompt.md"
+
+[dir]
+# Every key below is optional; remove a key to use wiggum's built-in default.
+log = "logs"
+temp = "tmp"
+uv_cache = ".uv-cache"
+
+[run]
+# Every key below is optional; remove a key to use wiggum's built-in default.
+manage_process_env = true
+api_retry_count = 0
+api_retry_interval_sec = 5
+agent_timeout_sec = 1800
+
+[run.executable]
+codex = "codex"
+copilot = "copilot"
+claude = "claude"
+
+[run.codex]
+tool_output_token_limit = 12000
+model_verbosity = "low"
+lean = false

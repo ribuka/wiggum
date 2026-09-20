@@ -4,7 +4,8 @@
 
 Windows の通常のユーザー Temp を必要とする pytest を実行する場合でも、
 `--auto-approve` は不要です。Codex の command rule で `uv run -m pytest` だけを
-sandbox 外で許可し、wiggum には `--no-managed-env` を指定してください。後者は
+sandbox 外で許可し、対象リポジトリの `wiggum/config.toml` に
+`[run].manage_process_env = false` を設定してください。これは
 Codex 子プロセスの `TMP`、`TEMP`、`UV_CACHE_DIR` を変更しないため、pytest は親プロセスの
 通常の Temp 設定を継承します。
 
@@ -28,16 +29,17 @@ blocked として報告します。PowerShell では次で rule の一致を確�
 
 ```powershell
 codex execpolicy check --pretty --rules "$env:USERPROFILE\.codex\rules\pytest.rules" -- uv run -m pytest
-uv run wiggum run --no-managed-env
+uv run wiggum run --provider codex
 ```
 
 ## English
 
 When pytest requires the normal Windows user Temp directory, you do not need
 `--auto-approve`. Use a Codex command rule to allow only `uv run -m pytest`
-outside the sandbox, and pass `--no-managed-env` to wiggum. The latter leaves
-`TMP`, `TEMP`, and `UV_CACHE_DIR` unchanged for the Codex child process, so
-pytest inherits the parent's normal Temp configuration.
+outside the sandbox, and set `[run].manage_process_env = false` in the target
+repository's `wiggum/config.toml`. This leaves `TMP`, `TEMP`, and
+`UV_CACHE_DIR` unchanged for the Codex child process, so pytest inherits the
+parent's normal Temp configuration.
 
 Create `%USERPROFILE%\\.codex\\rules\\pytest.rules` with:
 
@@ -61,5 +63,5 @@ directory. In PowerShell, verify the rule match and run wiggum with:
 
 ```powershell
 codex execpolicy check --pretty --rules "$env:USERPROFILE\.codex\rules\pytest.rules" -- uv run -m pytest
-uv run wiggum run --no-managed-env
+uv run wiggum run --provider codex
 ```

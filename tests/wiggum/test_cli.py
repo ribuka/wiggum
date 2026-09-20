@@ -13,42 +13,30 @@ from wiggum.exit_codes import ExitCode
 
 def test_parse_args_run_defaults_to_the_current_directory() -> None:
     """Default the run subcommand's --repo to the current working directory."""
-    args = _parse_args(["run"])
+    args = _parse_args(["run", "--provider", "codex"])
 
     assert args.command == "run"
     assert args.repo == Path.cwd()
-    assert args.prompt_file is None
-    assert args.logs_dir is None
-    assert args.temp_dir is None
-    assert args.uv_cache_dir is None
-    assert args.no_managed_env is False
     assert args.max_loops == 20
-    assert args.api_retry_count is None
     assert args.reasoning_effort == "medium"
-    assert args.model_verbosity == "low"
-    assert args.tool_output_token_limit == 12_000
-    assert args.lean is False
     assert args.provider == "codex"
-    assert args.executable is None
-    assert args.codex is None
+    assert args.model is None
+    assert args.auto_approve is False
+    assert args.dry_run is False
 
 
-def test_parse_args_run_accepts_a_provider_and_executable() -> None:
-    """Parse an explicit provider selection and generic executable override."""
-    args = _parse_args(
-        [
-            "run",
-            "--provider",
-            "copilot",
-            "--executable",
-            "/opt/copilot",
-            "--auto-approve",
-        ]
-    )
+def test_parse_args_run_accepts_a_provider() -> None:
+    """Parse an explicit provider selection."""
+    args = _parse_args(["run", "--provider", "copilot", "--auto-approve"])
 
     assert args.provider == "copilot"
-    assert args.executable == "/opt/copilot"
     assert args.auto_approve is True
+
+
+def test_parse_args_run_requires_a_provider() -> None:
+    """Reject a run invocation that omits --provider."""
+    with pytest.raises(SystemExit):
+        _parse_args(["run"])
 
 
 def test_parse_args_run_rejects_an_unsupported_provider() -> None:
@@ -57,31 +45,16 @@ def test_parse_args_run_rejects_an_unsupported_provider() -> None:
         _parse_args(["run", "--provider", "unsupported"])
 
 
-def test_parse_args_run_rejects_removed_tasks_file_option() -> None:
-    """Reject the removed task-ledger path override."""
+def test_parse_args_run_rejects_options_moved_to_config_toml() -> None:
+    """Reject flags that now live in wiggum/config.toml's [run] table."""
     with pytest.raises(SystemExit):
         _parse_args(["run", "--tasks-file", "custom.json"])
 
 
-def test_parse_args_run_accepts_token_saving_controls() -> None:
-    """Parse explicit reasoning, verbosity, tool-output, and lean settings."""
-    args = _parse_args(
-        [
-            "run",
-            "--reasoning-effort",
-            "medium",
-            "--model-verbosity",
-            "high",
-            "--tool-output-token-limit",
-            "1234",
-            "--lean",
-        ]
-    )
-
-    assert args.reasoning_effort == "medium"
-    assert args.model_verbosity == "high"
-    assert args.tool_output_token_limit == 1234
-    assert args.lean is True
+def test_parse_args_run_rejects_the_removed_codex_only_flags() -> None:
+    """Reject Codex-only flags now read from [run.codex]."""
+    with pytest.raises(SystemExit):
+        _parse_args(["run", "--model-verbosity", "high"])
 
 
 @pytest.mark.parametrize("reasoning_effort", ("none", "max"))
@@ -89,7 +62,7 @@ def test_parse_args_run_accepts_model_specific_reasoning_efforts(
     reasoning_effort: str,
 ) -> None:
     """Parse reasoning-effort values whose support depends on the model."""
-    args = _parse_args(["run", "--reasoning-effort", reasoning_effort])
+    args = _parse_args(["run", "--provider", "codex", "--reasoning-effort", reasoning_effort])
 
     assert args.reasoning_effort == reasoning_effort
 
@@ -138,11 +111,11 @@ def test_main_init_reports_preflight_error_on_existing_files(
     assert exit_code == ExitCode.PREFLIGHT_ERROR
 
 
-def test_main_run_forwards_the_default_provider_and_codex_executable(
+def test_main_run_forwards_the_selected_provider(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    """Forward the default provider and the legacy codex_executable value."""
+    """Forward the selected provider and no model or auto-approve."""
     captured: dict[str, object] = {}
 
     def fake_run(**kwargs: object) -> ExitCode:
@@ -151,19 +124,21 @@ def test_main_run_forwards_the_default_provider_and_codex_executable(
 
     monkeypatch.setattr(cli_module, "run", fake_run)
 
-    exit_code = main(["run", "--repo", str(tmp_path)])
+    exit_code = main(["run", "--repo", str(tmp_path), "--provider", "codex"])
 
     assert exit_code == ExitCode.SUCCESS
     assert captured["provider"] == "codex"
-    assert captured["codex_executable"] == "codex"
-    assert captured["executable"] is None
+    assert captured["model"] is None
+    assert captured["auto_approve"] is False
+    assert "codex_executable" not in captured
+    assert "executable" not in captured
 
 
-def test_main_run_forwards_an_explicit_provider_and_executable(
+def test_main_run_forwards_an_explicit_provider_and_model(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    """Forward an explicit provider selection and executable override."""
+    """Forward an explicit provider selection and model override."""
     captured: dict[str, object] = {}
 
     def fake_run(**kwargs: object) -> ExitCode:
@@ -179,13 +154,13 @@ def test_main_run_forwards_an_explicit_provider_and_executable(
             str(tmp_path),
             "--provider",
             "copilot",
-            "--executable",
-            "/opt/copilot",
+            "--model",
+            "gpt-5",
             "--auto-approve",
         ]
     )
 
     assert exit_code == ExitCode.SUCCESS
     assert captured["provider"] == "copilot"
-    assert captured["executable"] == "/opt/copilot"
+    assert captured["model"] == "gpt-5"
     assert captured["auto_approve"] is True

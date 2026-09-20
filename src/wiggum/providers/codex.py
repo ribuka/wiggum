@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from wiggum.defaults import (
-    DEFAULT_CODEX_TIMEOUT_SEC,
+    DEFAULT_AGENT_TIMEOUT_SEC,
     DEFAULT_MODEL_VERBOSITY,
     DEFAULT_REASONING_EFFORT,
     DEFAULT_TOOL_OUTPUT_TOKEN_LIMIT,
@@ -131,7 +131,7 @@ def run_codex(
     log_path: Path,
     environment: dict[str, str],
     prompt: str,
-    timeout_sec: int = DEFAULT_CODEX_TIMEOUT_SEC,
+    timeout_sec: int = DEFAULT_AGENT_TIMEOUT_SEC,
 ) -> subprocess.CompletedProcess[str]:
     """Run Codex and write its combined output to a loop log.
 

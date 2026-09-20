@@ -8,19 +8,10 @@ from pathlib import Path
 
 from loguru import logger
 
-from wiggum.defaults import (
-    DEFAULT_API_RETRY_COUNT,
-    DEFAULT_API_RETRY_INTERVAL_SEC,
-    DEFAULT_CODEX_TIMEOUT_SEC,
-    DEFAULT_MAX_LOOPS,
-    DEFAULT_MODEL_VERBOSITY,
-    DEFAULT_REASONING_EFFORT,
-    DEFAULT_TOOL_OUTPUT_TOKEN_LIMIT,
-    MODEL_VERBOSITIES,
-)
+from wiggum.defaults import DEFAULT_MAX_LOOPS, DEFAULT_REASONING_EFFORT
 from wiggum.exit_codes import ExitCode
 from wiggum.logging.console_logging import configure_console_logging
-from wiggum.providers import DEFAULT_PROVIDER, PROVIDERS, REASONING_EFFORTS
+from wiggum.providers import PROVIDERS, REASONING_EFFORTS
 from wiggum.runner import run
 from wiggum.scaffold import scaffold
 
@@ -34,66 +25,12 @@ def _add_run_arguments(parser: argparse.ArgumentParser) -> None:
         Subparser receiving the ``run`` arguments.
     """
     parser.add_argument("--repo", type=Path, default=Path.cwd())
-    parser.add_argument(
-        "--prompt-file",
-        type=Path,
-        default=None,
-        help="defaults to wiggum's bundled Ralph loop prompt",
-    )
-    parser.add_argument(
-        "--logs-dir",
-        type=Path,
-        default=None,
-        help="defaults to <repo>/logs",
-    )
-    parser.add_argument(
-        "--temp-dir",
-        type=Path,
-        default=None,
-        help="defaults to <repo>/tmp",
-    )
-    parser.add_argument(
-        "--uv-cache-dir",
-        type=Path,
-        default=None,
-        help="defaults to <repo>/.uv-cache",
-    )
-    parser.add_argument(
-        "--no-managed-env",
-        action="store_true",
-        help="do not set UV_CACHE_DIR, TMP, and TEMP for the Codex child process",
-    )
     parser.add_argument("--max-loops", type=int, default=DEFAULT_MAX_LOOPS)
-    parser.add_argument("--api-retry-count", type=int, default=DEFAULT_API_RETRY_COUNT)
-    parser.add_argument(
-        "--api-retry-interval-sec",
-        type=int,
-        default=DEFAULT_API_RETRY_INTERVAL_SEC,
-    )
-    parser.add_argument(
-        "--codex-timeout-sec",
-        type=int,
-        default=DEFAULT_CODEX_TIMEOUT_SEC,
-        help="maximum seconds to wait for each provider child process",
-    )
     parser.add_argument(
         "--provider",
         choices=PROVIDERS,
-        default=DEFAULT_PROVIDER,
-        help="AI model vendor used to run each Ralph loop; defaults to codex",
-    )
-    parser.add_argument(
-        "--executable",
-        default=None,
-        help=(
-            "provider CLI executable name or path; defaults to codex, copilot, "
-            "or claude depending on --provider"
-        ),
-    )
-    parser.add_argument(
-        "--codex",
-        default=None,
-        help="[deprecated alias for --executable] Codex executable name or path",
+        required=True,
+        help="AI model vendor used to run each Ralph loop",
     )
     parser.add_argument("--model", help="optional model override")
     parser.add_argument(
@@ -106,29 +43,6 @@ def _add_run_arguments(parser: argparse.ArgumentParser) -> None:
             "the provider; an unsupported combination is rejected by the "
             "provider CLI. For claude, only low/medium/high/xhigh/max are "
             "supported regardless of model; none/minimal are rejected"
-        ),
-    )
-    parser.add_argument(
-        "--model-verbosity",
-        choices=MODEL_VERBOSITIES,
-        default=DEFAULT_MODEL_VERBOSITY,
-        help="Codex model verbosity; defaults to low (codex provider only)",
-    )
-    parser.add_argument(
-        "--tool-output-token-limit",
-        type=int,
-        default=DEFAULT_TOOL_OUTPUT_TOKEN_LIMIT,
-        help=(
-            "maximum tokens retained from each tool output; defaults to 6000 "
-            "(codex provider only)"
-        ),
-    )
-    parser.add_argument(
-        "--lean",
-        action="store_true",
-        help=(
-            "ignore user Codex config and disable reasoning summaries "
-            "(codex provider only)"
         ),
     )
     parser.add_argument(
@@ -220,25 +134,12 @@ def _run_command(args: argparse.Namespace) -> ExitCode:
     """
     return run(
         repo=args.repo,
-        prompt_path=args.prompt_file,
         max_loops=args.max_loops,
         provider=args.provider,
-        codex_executable=args.codex if args.codex is not None else "codex",
-        executable=args.executable,
         model=args.model,
         reasoning_effort=args.reasoning_effort,
-        model_verbosity=args.model_verbosity,
-        tool_output_token_limit=args.tool_output_token_limit,
-        lean=args.lean,
         auto_approve=args.auto_approve,
         dry_run=args.dry_run,
-        api_retry_count=args.api_retry_count,
-        api_retry_interval_sec=args.api_retry_interval_sec,
-        codex_timeout_sec=args.codex_timeout_sec,
-        logs_dir=args.logs_dir,
-        temp_dir=args.temp_dir,
-        uv_cache_dir=args.uv_cache_dir,
-        manage_process_env=not args.no_managed_env,
     )
 
 
