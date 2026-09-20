@@ -12,6 +12,15 @@ Ralph ループランナーです。プロジェクトの `TASKS.json` 台帳か
 wiggum 自体はプロジェクトの仕様やタスクを定義しません。まず `wiggum init` で Ralph
 ループ用のファイルをリポジトリに生成し、その後プロジェクトに合わせて編集してください。
 
+- [インストール](#インストール)
+- [クイックスタート](#クイックスタート)
+  - [リポジトリの初期化](#リポジトリの初期化)
+  - [Ralph ファイルの設定](#ralph-ファイルの設定)
+- [オプション一覧](#オプション一覧)
+  - [Codex 専用オプション](#codex-専用オプション)
+- [プロバイダ別の注意点](#プロバイダ別の注意点)
+- [Windows: pytest を sandbox 外で実行する](#windows-pytest-を-sandbox-外で実行する)
+
 ### インストール
 
 ```bash
@@ -22,13 +31,22 @@ uv add wiggum
 uv add git+https://github.com/ribuka/wiggum.git
 ```
 
-### リポジトリの初期化
+### クイックスタート
+
+最短で動かす手順は次のとおりです。
 
 ```bash
 uv run wiggum init
 ```
 
-このコマンドは対象リポジトリの `wiggum/` 配下に `config.toml`、`RALPH_PROJECT.md`、
+```bash
+uv run wiggum run --dry-run
+uv run wiggum run
+```
+
+#### リポジトリの初期化
+
+`wiggum init` は対象リポジトリの `wiggum/` 配下に `config.toml`、`RALPH_PROJECT.md`、
 `TASKS.json`、`PROGRESS.md` を作成します（`--repo` の既定値はカレントディレクトリです）。
 Ralph の共通ルールは wiggum に同梱されています。ループを実行する前に、プロジェクトに
 合わせて `wiggum/RALPH_PROJECT.md` と `wiggum/TASKS.json` を編集してください。既存の
@@ -56,90 +74,82 @@ progress = "wiggum/PROGRESS.md"
 `SPEC.md` や `AGENTS.md` など、設定されたプロジェクト指示ファイルが読むよう指定するファイルは、その設定で
 指定されている場合にのみ必要です。
 
-### Ralph ループの実行
+### オプション一覧
 
-```bash
-uv run wiggum run --dry-run
-uv run wiggum run
-```
+基本オプション（プロバイダ共通）:
 
-主なオプション:
+| オプション | 既定値 | 説明 |
+| --- | --- | --- |
+| `--repo PATH` | カレントディレクトリ | 操作対象のリポジトリ。 |
+| `--prompt-file PATH` | wiggum 同梱の Ralph ループプロンプト | 各ループでエージェントに渡すプロンプト。 |
+| `--logs-dir PATH` / `--temp-dir PATH` / `--uv-cache-dir PATH` | — | ループログ、一時ファイル、uv キャッシュの出力先を上書きします。 |
+| `--no-managed-env` | — | 子プロセスに `UV_CACHE_DIR`、`TMP`、`TEMP` を設定しません。 |
+| `--max-loops N` | — | — |
+| `--model NAME` | — | — |
+| `--auto-approve` | — | 要否はプロバイダによって異なります。詳細は[プロバイダ別の注意点](#プロバイダ別の注意点)を参照。 |
+| `--api-retry-count N` | — | — |
+| `--api-retry-interval-sec N` | — | — |
+| `--codex-timeout-sec N` | — | 名前に反してプロバイダ共通です。各プロバイダの子プロセスを待つ最大秒数。 |
 
-- `--repo PATH` — 操作対象のリポジトリ（既定値: カレントディレクトリ）。
-- `--prompt-file PATH` — 各ループでエージェントに渡すプロンプト（既定値: wiggum 同梱の Ralph ループプロンプト）。
-- `--logs-dir PATH` / `--temp-dir PATH` / `--uv-cache-dir PATH` — ループログ、一時ファイル、uv キャッシュの出力先を上書きします。
-- `--no-managed-env` — 子プロセスに `UV_CACHE_DIR`、`TMP`、`TEMP` を設定しません。
-- `--provider {codex,copilot,claude}` — 使用する AI モデルベンダー（既定値: `codex`）。
-- `--executable PATH` — ベンダーの CLI 実行ファイル（既定値: `codex`、`copilot`、または `claude`）。`--codex PATH` は Codex 用の非推奨エイリアスとして引き続き利用できます。
-- `--reasoning-effort LEVEL` — 推論量（既定値: `medium`。指定可能な値: `none`/`minimal`/`low`/`medium`/`high`/`xhigh`/`max`）。Codex と Copilot では対応レベルがプロバイダではなくモデルに依存するため、wiggum はプロバイダ単位での拒否は行わず、非対応の組み合わせは各プロバイダ CLI 自身が検証エラーとして扱います。Claude Code CLI の `--effort` フラグはモデルによらず `low`/`medium`/`high`/`xhigh`/`max` のみ受け付けるため、`claude` プロバイダで `none`/`minimal` を指定すると検証エラーになります。
-- `--model-verbosity LEVEL` — Codex の出力 verbosity（既定値: `low`。Codex 専用）。
-- `--tool-output-token-limit N` — モデル履歴に保持するツール出力の上限（既定値: `12000` tokens。Codex 専用）。
-- `--lean` — ユーザーの Codex 設定を読み込まず、reasoning summary を無効化します。認証情報は引き続き利用されます（Codex 専用）。
-- `--max-loops N`、`--model NAME`、`--auto-approve`、`--api-retry-count N`、`--api-retry-interval-sec N`、`--codex-timeout-sec N`。
+プロバイダ選択:
 
-`--provider copilot` または `--provider claude` を指定する場合、`--auto-approve` は
-必須です。GitHub Copilot CLI には Codex の `workspace-write` サンドボックスに相当する
-半自動モードがなく `--allow-all-tools` を渡して全ツールを許可する必要があり、
-Claude Code CLI も同様に非対話モードでは承認プロンプトに応答できないため
-`--permission-mode bypassPermissions` を渡してすべてのツール実行を許可する必要が
-あります。`--reasoning-effort` は Codex と Copilot で利用できます。対応するレベルは
-プロバイダではなくモデルに依存するため、wiggum は値をプロバイダ単位で拒否せず、そのまま
-各プロバイダ CLI へ転送します。非対応の組み合わせは CLI 側の検証エラーになります。
-Claude Code CLI は `--effort` フラグへそのまま転送されますが、モデルによらず
-`low`/`medium`/`high`/`xhigh`/`max` のみ受け付けるため、`claude` 選択時に `none`
-または `minimal` を指定すると wiggum 自身が検証エラーとして拒否します。また
-`--model-verbosity`、`--tool-output-token-limit`、`--lean` は Codex 固有のインライン
-設定であり、Copilot または Claude 選択時に既定値以外を指定すると検証エラーになります。
+| オプション | 既定値 | 説明 |
+| --- | --- | --- |
+| `--provider {codex,copilot,claude}` | `codex` | 使用する AI モデルベンダー。 |
+| `--executable PATH` | `codex`、`copilot`、または `claude`（選択したプロバイダに対応するもの） | ベンダーの CLI 実行ファイル。`--codex PATH` は Codex 用の非推奨エイリアスとして引き続き利用できます。 |
 
-各 Codex 試行では JSONL の `turn.completed` イベントから input、cached input、output、
-reasoning output の token 使用量を集計し、タスク累計と実行全体の累計をログに表示します。Codex
-がツール出力を切り詰めたイベントを報告した場合は、その件数と設定上限も警告します。
-GitHub Copilot CLI は Codex と同等の機械可読な token 使用量イベントを公開していないため、
-`--provider copilot` では常に使用量が 0 として記録されます。Claude Code CLI は
-`--output-format stream-json` の最終 `result` イベントに input、cached input（プロンプトキャッシュから
-読み取られた分）、output の token 使用量を含めて報告するため、`--provider claude` でも
-これらは集計されます。ただし reasoning（thinking）token の内訳は公開されていないため、
-その値は常に 0 として記録されます。
+推論量:
+
+| オプション | 既定値 | 説明 |
+| --- | --- | --- |
+| `--reasoning-effort LEVEL` | `medium` | 推論量。指定可能な値: `none`/`minimal`/`low`/`medium`/`high`/`xhigh`/`max`。プロバイダごとの対応状況は[プロバイダ別の注意点](#プロバイダ別の注意点)を参照。 |
+
+#### Codex 専用オプション
+
+以下のオプションは `--provider codex` を選択した場合のみ有効です。Copilot または
+Claude を選択した状態で既定値以外を指定すると検証エラーになります。
+
+| オプション | 既定値 | 説明 |
+| --- | --- | --- |
+| `--model-verbosity LEVEL` | `low` | Codex の出力 verbosity。 |
+| `--tool-output-token-limit N` | `12000` tokens | モデル履歴に保持するツール出力の上限。 |
+| `--lean` | — | ユーザーの Codex 設定を読み込まず、reasoning summary を無効化します。認証情報は引き続き利用されます。 |
 
 すべてのオプションと終了コードは、`uv run wiggum run --help` で確認できます。
 
-### pytest だけを sandbox 外で実行する
+### プロバイダ別の注意点
 
-Windows の通常のユーザー Temp を必要とする pytest を実行する場合でも、
-`--auto-approve` は不要です。Codex の command rule で `uv run -m pytest` だけを
-sandbox 外で許可し、wiggum には `--no-managed-env` を指定してください。後者は
-Codex 子プロセスの `TMP`、`TEMP`、`UV_CACHE_DIR` を変更しないため、pytest は親プロセスの
-通常の Temp 設定を継承します。
+`--provider` に応じて、必須になるフラグ、`--reasoning-effort` の対応状況、
+トークン使用量の記録方式が異なります。
 
-`%USERPROFILE%\\.codex\\rules\\pytest.rules` に次を作成します。
+必須フラグ:
 
-```starlark
-prefix_rule(
-    pattern = ["uv", "run", "-m", "pytest"],
-    decision = "allow",
-    justification = "Run required pytest outside the Codex sandbox using the normal Windows user Temp.",
-)
-```
+| プロバイダ | `--auto-approve` | 内部で追加されるフラグ |
+| --- | --- | --- |
+| Codex | 不要 | — |
+| Copilot | 必須 | `--allow-all-tools`（Codex の `workspace-write` サンドボックスに相当する半自動モードがないため） |
+| Claude | 必須 | `--permission-mode bypassPermissions`（非対話モードでは承認プロンプトに応答できないため） |
 
-プロジェクト固有の rule を使う場合は `<repo>/.codex/rules/pytest.rules` に置けますが、
-Codex がそのプロジェクトの `.codex` 設定を trusted として読み込む必要があります。ユーザー
-階層の rule は複数のリポジトリに適用されるため、必要最小限の prefix にしてください。
+`--reasoning-effort` の対応状況:
 
-プロジェクトの pytest 指示では、昇格要求ではなく `uv run -m pytest` を直接実行するよう
-明記してください。rule が拒否された場合は sandbox 内実行や Temp の変更で回避せず、検証を
-blocked として報告します。PowerShell では次で rule の一致を確認できます。
+| プロバイダ | 対応レベル | 非対応時の挙動 |
+| --- | --- | --- |
+| Codex | モデルに依存 | Codex CLI 自身が検証エラーとして扱います |
+| Copilot | モデルに依存 | Copilot CLI 自身が検証エラーとして扱います |
+| Claude | `low`/`medium`/`high`/`xhigh`/`max` のみ | `none`/`minimal` を指定すると wiggum 自身が検証エラーとして拒否します |
 
-```powershell
-codex execpolicy check --pretty --rules "$env:USERPROFILE\.codex\rules\pytest.rules" -- uv run -m pytest
-uv run wiggum run --no-managed-env
-```
+トークン使用量の記録:
 
-### 開発
+| プロバイダ | 記録内容 |
+| --- | --- |
+| Codex | `turn.completed` イベントから input・cached input・output・reasoning output を集計し、タスク累計と実行全体の累計をログに表示します。ツール出力を切り詰めたイベントが報告された場合は、その件数と設定上限も警告します。 |
+| Copilot | 機械可読な token 使用量イベントを公開していないため、常に使用量 0 として記録されます。 |
+| Claude | `--output-format stream-json` の最終 `result` イベントから input・cached input（プロンプトキャッシュから読み取られた分）・output の token 使用量を集計します。reasoning（thinking）token の内訳は公開されていないため、常に 0 として記録されます。 |
 
-```bash
-uv run -m pytest
-uv run -m ruff check .
-```
+### Windows: pytest を sandbox 外で実行する
+
+Windows の通常のユーザー Temp を必要とする pytest を Codex の sandbox 外で実行する
+手順は [docs/windows-pytest-sandbox.md](docs/windows-pytest-sandbox.md) を参照してください。
 
 ## English
 
@@ -154,7 +164,16 @@ wiggum itself does not define your project's specification or tasks; use
 `wiggum init` to scaffold the Ralph loop files into your repository, then edit
 them for your project.
 
-## Install
+- [Install](#install)
+- [Quick Start](#quick-start)
+  - [Scaffold a repository](#scaffold-a-repository)
+  - [Ralph file configuration](#ralph-file-configuration)
+- [Options reference](#options-reference)
+  - [Codex-only options](#codex-only-options)
+- [Provider differences](#provider-differences)
+- [Run only pytest outside the sandbox](#run-only-pytest-outside-the-sandbox)
+
+### Install
 
 ```bash
 uv add wiggum
@@ -164,19 +183,28 @@ uv add wiggum
 uv add git+https://github.com/ribuka/wiggum.git
 ```
 
-## Scaffold a repository
+### Quick Start
+
+The shortest path to a working loop:
 
 ```bash
 uv run wiggum init
 ```
 
-This writes `config.toml`, `RALPH_PROJECT.md`, `TASKS.json`, and `PROGRESS.md`
+```bash
+uv run wiggum run --dry-run
+uv run wiggum run
+```
+
+#### Scaffold a repository
+
+`wiggum init` writes `config.toml`, `RALPH_PROJECT.md`, `TASKS.json`, and `PROGRESS.md`
 under `wiggum/` in the target repository (`--repo` defaults to the current
 directory). The general Ralph rules are bundled with wiggum. Edit
 `wiggum/RALPH_PROJECT.md` and `wiggum/TASKS.json` to match your project before
 running loops. Use `--force` to overwrite files that already exist.
 
-### Ralph file configuration
+#### Ralph file configuration
 
 `wiggum run` always reads `wiggum/config.toml` in the target repository. A
 missing configuration is a preflight error. The default configuration is:
@@ -200,110 +228,80 @@ with `--prompt-file`. Any files named by the configured project instructions,
 such as `SPEC.md` or `AGENTS.md`, are required only when those instructions say
 to read them.
 
-## Run Ralph loops
+### Options reference
 
-```bash
-uv run wiggum run --dry-run
-uv run wiggum run
-```
+Basic options (shared by all providers):
 
-Useful options:
+| Option | Default | Description |
+| --- | --- | --- |
+| `--repo PATH` | current directory | Repository to operate on. |
+| `--prompt-file PATH` | wiggum's bundled Ralph loop prompt | Prompt passed to the agent for each loop. |
+| `--logs-dir PATH` / `--temp-dir PATH` / `--uv-cache-dir PATH` | — | Override where wiggum writes loop logs, temporary files, and the uv cache. |
+| `--no-managed-env` | — | Do not set `UV_CACHE_DIR`, `TMP`, and `TEMP` for the child process. |
+| `--max-loops N` | — | — |
+| `--model NAME` | — | — |
+| `--auto-approve` | — | Whether this is required depends on the provider; see [Provider differences](#provider-differences). |
+| `--api-retry-count N` | — | — |
+| `--api-retry-interval-sec N` | — | — |
+| `--codex-timeout-sec N` | — | Despite the name, this applies to all providers: the maximum time to wait for each provider's child process. |
 
-- `--repo PATH` — repository to operate on (default: current directory).
-- `--prompt-file PATH` — prompt passed to the agent for each loop (default:
-  wiggum's bundled Ralph loop prompt).
-- `--logs-dir PATH` / `--temp-dir PATH` / `--uv-cache-dir PATH` — override
-  where wiggum writes loop logs, temporary files, and the uv cache.
-- `--no-managed-env` — do not set `UV_CACHE_DIR`, `TMP`, and `TEMP` for the
-  child process.
-- `--provider {codex,copilot,claude}` — AI model vendor to use (default:
-  `codex`).
-- `--executable PATH` — vendor CLI executable (default: `codex`, `copilot`,
-  or `claude`). `--codex PATH` remains available as a deprecated alias for
-  Codex.
-- `--reasoning-effort LEVEL` — reasoning effort (default: `medium`; accepted
-  values: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`). For
-  Codex and Copilot, support for a given level depends on the selected
-  model, not the provider, so wiggum does not reject a level by provider;
-  each provider CLI rejects an unsupported combination itself. Claude Code
-  CLI's `--effort` flag accepts only `low`, `medium`, `high`, `xhigh`, and
-  `max` regardless of model, so `none` and `minimal` are a validation error
-  for the `claude` provider.
-- `--model-verbosity LEVEL` — Codex output verbosity (default: `low`; Codex
-  only).
-- `--tool-output-token-limit N` — maximum tool-output tokens retained in model
-  history (default: `12000`; Codex only).
-- `--lean` — ignore user Codex configuration and disable reasoning summaries;
-  saved authentication remains available (Codex only).
-- `--max-loops N`, `--model NAME`, `--auto-approve`, `--api-retry-count N`,
-  `--api-retry-interval-sec N`, `--codex-timeout-sec N`.
+Provider selection:
 
-`--auto-approve` is required when `--provider copilot` or `--provider claude`
-is selected. GitHub Copilot CLI has no partially-unattended mode comparable
-to Codex's `workspace-write` sandbox and must be told to allow every tool
-with `--allow-all-tools`; Claude Code CLI likewise cannot answer permission
-prompts in non-interactive mode, so wiggum passes
-`--permission-mode bypassPermissions` to allow every tool. `--reasoning-effort`
-is supported by Codex and Copilot. Support for a given level depends on the
-selected model, not the provider, so wiggum forwards the value as-is rather
-than rejecting it by provider; an unsupported combination is a validation
-error from the provider CLI itself. Claude Code CLI forwards the value to its
-`--effort` flag too, but that flag accepts only `low`, `medium`, `high`,
-`xhigh`, and `max` regardless of model, so wiggum itself rejects `none` and
-`minimal` for the `claude` provider. `--model-verbosity`,
-`--tool-output-token-limit`, and `--lean` are Codex-only inline
-configuration; passing a non-default value together with `--provider copilot`
-or `--provider claude` is a validation error.
+| Option | Default | Description |
+| --- | --- | --- |
+| `--provider {codex,copilot,claude}` | `codex` | AI model vendor to use. |
+| `--executable PATH` | `codex`, `copilot`, or `claude` (matching the selected provider) | Vendor CLI executable. `--codex PATH` remains available as a deprecated alias for Codex. |
 
-For every Codex attempt, wiggum reads the JSONL `turn.completed` event and logs
-input, cached input, output, and reasoning-output token usage together with task
-and run totals. If Codex reports truncated tool-output events, wiggum also logs
-their count and configured limit as a warning. GitHub Copilot CLI does not
-expose a machine-readable per-turn usage event comparable to Codex's, so
-`--provider copilot` always reports all-zero usage. Claude Code CLI's
-`--output-format stream-json` final `result` event reports input, cached input (tokens
-served from the prompt cache), and output token usage, so `--provider claude`
-tracks those as well; it does not break out reasoning (thinking) tokens, so
-that count is always zero.
+Reasoning effort:
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `--reasoning-effort LEVEL` | `medium` | Reasoning effort. Accepted values: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`. Support varies by provider; see [Provider differences](#provider-differences). |
+
+#### Codex-only options
+
+The following options are only effective with `--provider codex`. Passing a
+non-default value together with `--provider copilot` or `--provider claude`
+is a validation error.
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `--model-verbosity LEVEL` | `low` | Codex output verbosity. |
+| `--tool-output-token-limit N` | `12000` tokens | Maximum tool-output tokens retained in model history. |
+| `--lean` | — | Ignore user Codex configuration and disable reasoning summaries; saved authentication remains available. |
 
 Run `uv run wiggum run --help` for the full option list and exit codes.
 
+### Provider differences
+
+`--provider` changes which flags are required, how `--reasoning-effort` is
+handled, and how token usage is recorded.
+
+Required flags:
+
+| Provider | `--auto-approve` | Flag added internally |
+| --- | --- | --- |
+| Codex | not required | — |
+| Copilot | required | `--allow-all-tools` (no partially-unattended mode comparable to Codex's `workspace-write` sandbox) |
+| Claude | required | `--permission-mode bypassPermissions` (cannot answer permission prompts in non-interactive mode) |
+
+`--reasoning-effort` support:
+
+| Provider | Supported levels | Behavior when unsupported |
+| --- | --- | --- |
+| Codex | depends on the selected model | rejected by the Codex CLI itself |
+| Copilot | depends on the selected model | rejected by the Copilot CLI itself |
+| Claude | `low`, `medium`, `high`, `xhigh`, `max` only | `none`/`minimal` is rejected by wiggum itself |
+
+Token usage reporting:
+
+| Provider | What is recorded |
+| --- | --- |
+| Codex | Reads the JSONL `turn.completed` event for input, cached input, output, and reasoning-output token usage, logging task and run totals. If Codex reports truncated tool-output events, wiggum also logs their count and configured limit as a warning. |
+| Copilot | Does not expose a machine-readable per-turn usage event comparable to Codex's, so usage is always reported as zero. |
+| Claude | Reads the final `result` event of `--output-format stream-json` for input, cached input (tokens served from the prompt cache), and output token usage. Reasoning (thinking) tokens are not broken out, so that count is always zero. |
+
 ### Run only pytest outside the sandbox
 
-When pytest requires the normal Windows user Temp directory, you do not need
-`--auto-approve`. Use a Codex command rule to allow only `uv run -m pytest`
-outside the sandbox, and pass `--no-managed-env` to wiggum. The latter leaves
-`TMP`, `TEMP`, and `UV_CACHE_DIR` unchanged for the Codex child process, so
-pytest inherits the parent's normal Temp configuration.
-
-Create `%USERPROFILE%\\.codex\\rules\\pytest.rules` with:
-
-```starlark
-prefix_rule(
-    pattern = ["uv", "run", "-m", "pytest"],
-    decision = "allow",
-    justification = "Run required pytest outside the Codex sandbox using the normal Windows user Temp.",
-)
-```
-
-For a repository-specific rule, use `<repo>/.codex/rules/pytest.rules`; Codex
-must trust that project's `.codex` configuration before it loads the rule.
-User-level rules apply to multiple repositories, so keep their command prefixes
-as narrow as possible.
-
-Project pytest instructions must tell Codex to run `uv run -m pytest` directly,
-not request escalation. If the rule denies the command, report verification as
-blocked rather than running pytest in the sandbox or changing the temporary
-directory. In PowerShell, verify the rule match and run wiggum with:
-
-```powershell
-codex execpolicy check --pretty --rules "$env:USERPROFILE\.codex\rules\pytest.rules" -- uv run -m pytest
-uv run wiggum run --no-managed-env
-```
-
-## Development
-
-```bash
-uv run -m pytest
-uv run -m ruff check .
-```
+See [docs/windows-pytest-sandbox.md](docs/windows-pytest-sandbox.md) for the
+steps to run pytest outside the Codex sandbox on Windows.
