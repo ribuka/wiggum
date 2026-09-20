@@ -131,9 +131,9 @@ def test_validate_provider_options_allows_a_codex_only_reasoning_effort_for_copi
 @pytest.mark.parametrize(
     ("kwargs", "expected_option"),
     [
-        ({"model_verbosity": "high"}, "--model-verbosity"),
-        ({"tool_output_token_limit": 1}, "--tool-output-token-limit"),
-        ({"lean": True}, "--lean"),
+        ({"model_verbosity": "high"}, "run.codex.model_verbosity"),
+        ({"tool_output_token_limit": 1}, "run.codex.tool_output_token_limit"),
+        ({"lean": True}, "run.codex.lean"),
     ],
 )
 def test_validate_provider_options_rejects_codex_only_options_for_copilot(
@@ -225,9 +225,9 @@ def test_validate_provider_options_rejects_reasoning_efforts_claude_does_not_acc
 @pytest.mark.parametrize(
     ("kwargs", "expected_option"),
     [
-        ({"model_verbosity": "high"}, "--model-verbosity"),
-        ({"tool_output_token_limit": 1}, "--tool-output-token-limit"),
-        ({"lean": True}, "--lean"),
+        ({"model_verbosity": "high"}, "run.codex.model_verbosity"),
+        ({"tool_output_token_limit": 1}, "run.codex.tool_output_token_limit"),
+        ({"lean": True}, "run.codex.lean"),
     ],
 )
 def test_validate_provider_options_rejects_codex_only_options_for_claude(

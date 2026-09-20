@@ -107,7 +107,7 @@ def test_wiggum_main_uses_formatted_console_logging(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Format a representative runner error with its true source location."""
-    exit_code = main(["run", "--max-loops", "0"])
+    exit_code = main(["run", "--provider", "codex", "--max-loops", "0"])
 
     captured = capsys.readouterr()
     assert exit_code == ExitCode.PREFLIGHT_ERROR

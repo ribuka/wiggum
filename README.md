@@ -6,8 +6,8 @@ wiggum は Codex CLI、GitHub Copilot CLI、Claude Code CLI に対応した、�
 Ralph ループランナーです。プロジェクトの `TASKS.json` 台帳から未完了のタスクを 1 件選び、
 選択した AI モデルベンダーの CLI で Ralph ループ 1 回分だけを実行し、ループの終了
 ステータスを検証して変更をコミットします。台帳が完了するか、停止条件に達するまで
-これを繰り返します。既定のベンダーは Codex CLI (`codex exec`) で、`--provider codex`
-を明示指定した場合と同じ挙動です。
+これを繰り返します。ベンダーの既定値はなく、`--provider` で毎回明示的に指定する
+必要があります。
 
 wiggum 自体はプロジェクトの仕様やタスクを定義しません。まず `wiggum init` で Ralph
 ループ用のファイルをリポジトリに生成し、その後プロジェクトに合わせて編集してください。
@@ -40,8 +40,8 @@ uv run wiggum init
 ```
 
 ```bash
-uv run wiggum run --dry-run
-uv run wiggum run
+uv run wiggum run --provider codex --dry-run
+uv run wiggum run --provider codex
 ```
 
 #### リポジトリの初期化
@@ -55,67 +55,91 @@ Ralph の共通ルールは wiggum に同梱されています。ループを実
 #### Ralph ファイルの設定
 
 `wiggum run` は必ず対象リポジトリの `wiggum/config.toml` を読みます。設定ファイルが
-ない場合は preflight error で終了します。既定の設定と配置は次のとおりです。
+ない場合は preflight error で終了します。`[paths]` は必須で、対象リポジトリ内の
+相対パスを指定します。設定されたタスク台帳、プロジェクト指示、進捗記録の3ファイルは
+すべて必要です。`[dir]` と `[run]` は run ごとに変えない運用チューニング値で、
+テーブルごと・キーごとに省略可能です（省略時は wiggum 組み込みの既定値）。
+既定の設定と配置は次のとおりです。
 
 ```toml
 [paths]
 tasks = "wiggum/TASKS.json"
 project = "wiggum/RALPH_PROJECT.md"
 progress = "wiggum/PROGRESS.md"
-```
+# prompt_file は省略可能。独自プロンプトを使う場合のみコメントを外す。
+# prompt_file = "wiggum/ralph_prompt.md"
 
-`[paths]` の全項目は必須で、対象リポジトリ内の相対パスを指定します。設定された
-タスク台帳、プロジェクト指示、進捗記録の3ファイルはすべて必要です。
+[dir]
+# 以下は全て省略可能。省略した場合は wiggum の組み込みデフォルトを使う。
+log = "logs"
+temp = "tmp"
+uv_cache = ".uv-cache"
+
+[run]
+# 以下は全て省略可能。省略した場合は wiggum の組み込みデフォルトを使う。
+manage_process_env = true
+api_retry_count = 0
+api_retry_interval_sec = 5
+agent_timeout_sec = 1800
+
+[run.executable]
+codex = "codex"
+copilot = "copilot"
+claude = "claude"
+
+[run.codex]
+tool_output_token_limit = 12000
+model_verbosity = "low"
+lean = false
+```
 
 - `.git/` — リポジトリのメタデータ。`--repo` にはこの Git ルートを指定します。
 
 対象リポジトリに `RALPH.md` は不要です。Ralph の共通ルールは wiggum が提供します。
-`ralph_prompt.md` は任意であり、`--prompt-file` で指定した場合のみ使用されます。
+`ralph_prompt.md` は任意であり、`[paths].prompt_file` で指定した場合のみ使用されます。
 `SPEC.md` や `AGENTS.md` など、設定されたプロジェクト指示ファイルが読むよう指定するファイルは、その設定で
 指定されている場合にのみ必要です。
 
 ### オプション一覧
 
-基本オプション（プロバイダ共通）:
+`wiggum run` の CLI フラグは、run ごとに変えることが多い値だけです。それ以外は
+すべて `wiggum/config.toml` の `[dir]`・`[run]` テーブルで設定します。
 
 | オプション | 既定値 | 説明 |
 | --- | --- | --- |
 | `--repo PATH` | カレントディレクトリ | 操作対象のリポジトリ。 |
-| `--prompt-file PATH` | wiggum 同梱の Ralph ループプロンプト | 各ループでエージェントに渡すプロンプト。 |
-| `--logs-dir PATH` / `--temp-dir PATH` / `--uv-cache-dir PATH` | — | ループログ、一時ファイル、uv キャッシュの出力先を上書きします。 |
-| `--no-managed-env` | — | 子プロセスに `UV_CACHE_DIR`、`TMP`、`TEMP` を設定しません。 |
-| `--max-loops N` | — | — |
-| `--model NAME` | — | — |
-| `--auto-approve` | — | 要否はプロバイダによって異なります。詳細は[プロバイダ別の注意点](#プロバイダ別の注意点)を参照。 |
-| `--api-retry-count N` | — | — |
-| `--api-retry-interval-sec N` | — | — |
-| `--codex-timeout-sec N` | — | 名前に反してプロバイダ共通です。各プロバイダの子プロセスを待つ最大秒数。 |
-
-プロバイダ選択:
-
-| オプション | 既定値 | 説明 |
-| --- | --- | --- |
-| `--provider {codex,copilot,claude}` | `codex` | 使用する AI モデルベンダー。 |
-| `--executable PATH` | `codex`、`copilot`、または `claude`（選択したプロバイダに対応するもの） | ベンダーの CLI 実行ファイル。`--codex PATH` は Codex 用の非推奨エイリアスとして引き続き利用できます。 |
-
-推論量:
-
-| オプション | 既定値 | 説明 |
-| --- | --- | --- |
+| `--max-loops N` | `20` | 起動するエージェントプロセスの最大数。 |
+| `--provider {codex,copilot,claude}` | 必須（既定値なし） | 使用する AI モデルベンダー。 |
+| `--model NAME` | — | モデルの上書き。省略した場合は wiggum は `--model` フラグを付与せず、選択した provider CLI 自身のデフォルトモデル（CLI設定や利用アカウントの既定）がそのまま使われます。 |
 | `--reasoning-effort LEVEL` | `medium` | 推論量。指定可能な値: `none`/`minimal`/`low`/`medium`/`high`/`xhigh`/`max`。プロバイダごとの対応状況は[プロバイダ別の注意点](#プロバイダ別の注意点)を参照。 |
+| `--auto-approve` | — | 要否はプロバイダによって異なります。詳細は[プロバイダ別の注意点](#プロバイダ別の注意点)を参照。 |
+| `--dry-run` | — | 入力を検証し、実行せずにプロバイダコマンドを1つ表示します。 |
+
+`wiggum/config.toml` の `[paths].prompt_file`・`[dir]`・`[run]` テーブル（すべて
+省略可能。既定値は `wiggum init` が生成するテンプレートを参照）:
+
+| キー | 既定値 | 説明 |
+| --- | --- | --- |
+| `[paths].prompt_file` | wiggum 同梱の Ralph ループプロンプト | 各ループでエージェントに渡すプロンプト。対象リポジトリ内の相対パス。 |
+| `[dir].log` / `[dir].temp` / `[dir].uv_cache` | `logs` / `tmp` / `.uv-cache` | ループログ、一時ファイル、uv キャッシュの出力先。対象リポジトリ内の相対パス。 |
+| `[run].manage_process_env` | `true` | `false` にすると子プロセスに `UV_CACHE_DIR`、`TMP`、`TEMP` を設定しません。 |
+| `[run].api_retry_count` | `0`（リトライ無効） | エージェント API・プロトコル失敗後の追加試行回数。 |
+| `[run].api_retry_interval_sec` | `5` | リトライ間隔（秒）。 |
+| `[run].agent_timeout_sec` | `1800` | 各プロバイダの子プロセスを待つ最大秒数（プロバイダ共通）。 |
+| `[run.executable].codex` / `.copilot` / `.claude` | `codex` / `copilot` / `claude` | 各プロバイダの CLI 実行ファイル名またはパス。 |
 
 #### Codex 専用オプション
 
-以下のオプションは `--provider codex` を選択した場合のみ有効です。Copilot または
+以下の `[run.codex]` キーは `--provider codex` を選択した場合のみ有効です。Copilot または
 Claude を選択した状態で既定値以外を指定すると検証エラーになります。
 
-| オプション | 既定値 | 説明 |
+| キー | 既定値 | 説明 |
 | --- | --- | --- |
-| `--model-verbosity LEVEL` | `low` | Codex の出力 verbosity。 |
-| `--tool-output-token-limit N` | `12000` tokens | モデル履歴に保持するツール出力の上限。 |
-| `--lean` | — | ユーザーの Codex 設定を読み込まず、reasoning summary を無効化します。認証情報は引き続き利用されます。 |
+| `[run.codex].model_verbosity` | `low` | Codex の出力 verbosity。 |
+| `[run.codex].tool_output_token_limit` | `12000` tokens | モデル履歴に保持するツール出力の上限。 |
+| `[run.codex].lean` | `false` | ユーザーの Codex 設定を読み込まず、reasoning summary を無効化します。認証情報は引き続き利用されます。 |
 
-すべてのオプションと終了コードは、`uv run wiggum run --help` で確認できます。
+すべての CLI オプションと終了コードは、`uv run wiggum run --help` で確認できます。
 
 ### プロバイダ別の注意点
 
@@ -157,8 +181,8 @@ wiggum is a reusable Ralph loop runner that supports Codex CLI, GitHub
 Copilot CLI, and Claude Code CLI. It selects one pending task from a project's `TASKS.json` ledger,
 runs exactly one Ralph loop with the selected AI model vendor's CLI, verifies
 the loop's terminal status, and commits the loop's changes, repeating until
-the ledger is complete or a stopping condition is hit. The default vendor is
-Codex CLI (`codex exec`), the same as explicitly passing `--provider codex`.
+the ledger is complete or a stopping condition is hit. There is no default
+vendor; `--provider` must be passed explicitly on every run.
 
 wiggum itself does not define your project's specification or tasks; use
 `wiggum init` to scaffold the Ralph loop files into your repository, then edit
@@ -192,8 +216,8 @@ uv run wiggum init
 ```
 
 ```bash
-uv run wiggum run --dry-run
-uv run wiggum run
+uv run wiggum run --provider codex --dry-run
+uv run wiggum run --provider codex
 ```
 
 #### Scaffold a repository
@@ -207,70 +231,96 @@ running loops. Use `--force` to overwrite files that already exist.
 #### Ralph file configuration
 
 `wiggum run` always reads `wiggum/config.toml` in the target repository. A
-missing configuration is a preflight error. The default configuration is:
+missing configuration is a preflight error. `[paths]` is required and every
+key must name a relative path inside the target repository; the configured
+task ledger, project instructions, and progress record must all exist.
+`[dir]` and `[run]` hold run tunables that rarely change between runs; each
+table and every key inside it are optional, falling back to wiggum's
+built-in defaults when omitted. The default configuration is:
 
 ```toml
 [paths]
 tasks = "wiggum/TASKS.json"
 project = "wiggum/RALPH_PROJECT.md"
 progress = "wiggum/PROGRESS.md"
-```
+# prompt_file is optional; uncomment to use a custom prompt instead of
+# wiggum's bundled default.
+# prompt_file = "wiggum/ralph_prompt.md"
 
-Every `[paths]` key is required and must name a relative path inside the target
-repository. The configured task ledger, project instructions, and progress
-record must all exist.
+[dir]
+# Every key below is optional; remove a key to use wiggum's built-in default.
+log = "logs"
+temp = "tmp"
+uv_cache = ".uv-cache"
+
+[run]
+# Every key below is optional; remove a key to use wiggum's built-in default.
+manage_process_env = true
+api_retry_count = 0
+api_retry_interval_sec = 5
+agent_timeout_sec = 1800
+
+[run.executable]
+codex = "codex"
+copilot = "copilot"
+claude = "claude"
+
+[run.codex]
+tool_output_token_limit = 12000
+model_verbosity = "low"
+lean = false
+```
 
 - `.git/` — the repository metadata; `--repo` must name this Git root.
 
 `RALPH.md` is not required in the target repository; wiggum provides the
-general Ralph rules. `ralph_prompt.md` is optional and is only used when passed
-with `--prompt-file`. Any files named by the configured project instructions,
-such as `SPEC.md` or `AGENTS.md`, are required only when those instructions say
-to read them.
+general Ralph rules. `ralph_prompt.md` is optional and is only used when
+named by `[paths].prompt_file`. Any files named by the configured project
+instructions, such as `SPEC.md` or `AGENTS.md`, are required only when those
+instructions say to read them.
 
 ### Options reference
 
-Basic options (shared by all providers):
+`wiggum run`'s CLI flags cover only the values that tend to change from one
+run to the next. Everything else lives in `wiggum/config.toml`'s `[dir]` and
+`[run]` tables.
 
 | Option | Default | Description |
 | --- | --- | --- |
 | `--repo PATH` | current directory | Repository to operate on. |
-| `--prompt-file PATH` | wiggum's bundled Ralph loop prompt | Prompt passed to the agent for each loop. |
-| `--logs-dir PATH` / `--temp-dir PATH` / `--uv-cache-dir PATH` | — | Override where wiggum writes loop logs, temporary files, and the uv cache. |
-| `--no-managed-env` | — | Do not set `UV_CACHE_DIR`, `TMP`, and `TEMP` for the child process. |
-| `--max-loops N` | — | — |
-| `--model NAME` | — | — |
-| `--auto-approve` | — | Whether this is required depends on the provider; see [Provider differences](#provider-differences). |
-| `--api-retry-count N` | — | — |
-| `--api-retry-interval-sec N` | — | — |
-| `--codex-timeout-sec N` | — | Despite the name, this applies to all providers: the maximum time to wait for each provider's child process. |
-
-Provider selection:
-
-| Option | Default | Description |
-| --- | --- | --- |
-| `--provider {codex,copilot,claude}` | `codex` | AI model vendor to use. |
-| `--executable PATH` | `codex`, `copilot`, or `claude` (matching the selected provider) | Vendor CLI executable. `--codex PATH` remains available as a deprecated alias for Codex. |
-
-Reasoning effort:
-
-| Option | Default | Description |
-| --- | --- | --- |
+| `--max-loops N` | `20` | Maximum number of agent processes to start. |
+| `--provider {codex,copilot,claude}` | required (no default) | AI model vendor to use. |
+| `--model NAME` | — | Optional model override. When omitted, wiggum does not pass a `--model` flag at all, so the selected provider CLI's own default model (from its own configuration or the signed-in account) is used. |
 | `--reasoning-effort LEVEL` | `medium` | Reasoning effort. Accepted values: `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`. Support varies by provider; see [Provider differences](#provider-differences). |
+| `--auto-approve` | — | Whether this is required depends on the provider; see [Provider differences](#provider-differences). |
+| `--dry-run` | — | Validate inputs and print one provider command without running it. |
+
+`wiggum/config.toml`'s `[paths].prompt_file`, `[dir]`, and `[run]` tables
+(every key is optional; see the defaults `wiggum init` writes above):
+
+| Key | Default | Description |
+| --- | --- | --- |
+| `[paths].prompt_file` | wiggum's bundled Ralph loop prompt | Prompt passed to the agent for each loop; a relative path inside the target repository. |
+| `[dir].log` / `[dir].temp` / `[dir].uv_cache` | `logs` / `tmp` / `.uv-cache` | Where wiggum writes loop logs, temporary files, and the uv cache; relative paths inside the target repository. |
+| `[run].manage_process_env` | `true` | Set to `false` to leave `UV_CACHE_DIR`, `TMP`, and `TEMP` unset for the child process. |
+| `[run].api_retry_count` | `0` (retries disabled) | Number of additional attempts after an agent API or protocol failure. |
+| `[run].api_retry_interval_sec` | `5` | Seconds to wait between agent API retry attempts. |
+| `[run].agent_timeout_sec` | `1800` | Maximum time to wait for each provider's child process (applies to every provider). |
+| `[run.executable].codex` / `.copilot` / `.claude` | `codex` / `copilot` / `claude` | Vendor CLI executable name or path for each provider. |
 
 #### Codex-only options
 
-The following options are only effective with `--provider codex`. Passing a
+The following `[run.codex]` keys are only effective with `--provider codex`. Passing a
 non-default value together with `--provider copilot` or `--provider claude`
 is a validation error.
 
-| Option | Default | Description |
+| Key | Default | Description |
 | --- | --- | --- |
-| `--model-verbosity LEVEL` | `low` | Codex output verbosity. |
-| `--tool-output-token-limit N` | `12000` tokens | Maximum tool-output tokens retained in model history. |
-| `--lean` | — | Ignore user Codex configuration and disable reasoning summaries; saved authentication remains available. |
+| `[run.codex].model_verbosity` | `low` | Codex output verbosity. |
+| `[run.codex].tool_output_token_limit` | `12000` tokens | Maximum tool-output tokens retained in model history. |
+| `[run.codex].lean` | `false` | Ignore user Codex configuration and disable reasoning summaries; saved authentication remains available. |
 
-Run `uv run wiggum run --help` for the full option list and exit codes.
+Run `uv run wiggum run --help` for the full CLI option list and exit codes.
 
 ### Provider differences
 

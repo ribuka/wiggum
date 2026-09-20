@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from wiggum.defaults import DEFAULT_CODEX_TIMEOUT_SEC, DEFAULT_REASONING_EFFORT
+from wiggum.defaults import DEFAULT_AGENT_TIMEOUT_SEC, DEFAULT_REASONING_EFFORT
 from wiggum.env.executable_resolution import resolve_executable
 from wiggum.providers._process_common import _decode
 from wiggum.providers.constants import CLAUDE
@@ -154,7 +154,7 @@ def run_claude(
     environment: dict[str, str],
     prompt: str,
     output_path: Path,
-    timeout_sec: int = DEFAULT_CODEX_TIMEOUT_SEC,
+    timeout_sec: int = DEFAULT_AGENT_TIMEOUT_SEC,
 ) -> subprocess.CompletedProcess[str]:
     """Run Claude Code CLI and capture its final message for one loop.
 

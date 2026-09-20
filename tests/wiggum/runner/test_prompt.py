@@ -44,6 +44,7 @@ def test_prompt_formats_contract_as_json() -> None:
         tasks=repo / "wiggum" / "TASKS.json",
         project=repo / "wiggum" / "RALPH_PROJECT.md",
         progress=repo / "wiggum" / "PROGRESS.md",
+        prompt_file=None,
     )
     prompt = prompt_for_selected_task("base", "TASK-001", _task("TASK-001"), paths, repo)
 
