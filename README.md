@@ -1,5 +1,7 @@
 # wiggum
 
+[日本語](#日本語) | [English](#english)
+
 ## 日本語
 
 wiggum は Codex CLI、GitHub Copilot CLI、Claude Code CLI に対応した、再利用できる
