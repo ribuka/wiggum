@@ -2,31 +2,12 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from typing import Any
 
-from wiggum.providers.usage.token_usage import TokenUsage
+from wiggum.providers.process_output import iter_json_events
+from wiggum.providers.usage.token_usage import TokenUsage, nonnegative_int
 
 __all__ = ["TokenUsage", "read_codex_usage"]
-
-
-def _nonnegative_int(value: Any) -> int:
-    """Return a non-negative integer value or zero for invalid input.
-
-    Parameters
-    ----------
-    value : Any
-        Untrusted value from a Codex JSON event.
-
-    Returns
-    -------
-    int
-        Parsed non-negative integer, or zero.
-    """
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        return 0
-    return value
 
 
 def read_codex_usage(log_path: Path) -> TokenUsage:
@@ -46,28 +27,17 @@ def read_codex_usage(log_path: Path) -> TokenUsage:
         Sum of every valid ``turn.completed`` usage object in the log. An
         unreadable log or a log without usage events produces all-zero usage.
     """
-    try:
-        lines = log_path.read_text(encoding="utf-8").splitlines()
-    except (OSError, UnicodeError):
-        return TokenUsage()
-
     total = TokenUsage()
-    for line in lines:
-        try:
-            event = json.loads(line)
-        except (json.JSONDecodeError, TypeError):
-            continue
-        if not isinstance(event, dict) or event.get("type") != "turn.completed":
+    for event in iter_json_events(log_path):
+        if event.get("type") != "turn.completed":
             continue
         usage = event.get("usage")
         if not isinstance(usage, dict):
             continue
         total += TokenUsage(
-            input_tokens=_nonnegative_int(usage.get("input_tokens")),
-            cached_input_tokens=_nonnegative_int(usage.get("cached_input_tokens")),
-            output_tokens=_nonnegative_int(usage.get("output_tokens")),
-            reasoning_output_tokens=_nonnegative_int(
-                usage.get("reasoning_output_tokens")
-            ),
+            input_tokens=nonnegative_int(usage.get("input_tokens")),
+            cached_input_tokens=nonnegative_int(usage.get("cached_input_tokens")),
+            output_tokens=nonnegative_int(usage.get("output_tokens")),
+            reasoning_output_tokens=nonnegative_int(usage.get("reasoning_output_tokens")),
         )
     return total

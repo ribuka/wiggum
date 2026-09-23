@@ -40,9 +40,7 @@ def scaffold(repo: Path, *, force: bool = False) -> list[Path]:
     if not force:
         existing = sorted(str(path) for path in destinations.values() if path.exists())
         if existing:
-            raise FileExistsError(
-                "refusing to overwrite existing files: " + ", ".join(existing)
-            )
+            raise FileExistsError("refusing to overwrite existing files: " + ", ".join(existing))
 
     written: list[Path] = []
     for destination_name, template_name in _TEMPLATE_FILES.items():

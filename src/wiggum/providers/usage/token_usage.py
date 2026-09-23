@@ -5,6 +5,24 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
+def nonnegative_int(value: object) -> int:
+    """Return a non-negative integer value or zero for invalid input.
+
+    Parameters
+    ----------
+    value : object
+        Untrusted value from a provider JSON event.
+
+    Returns
+    -------
+    int
+        Parsed non-negative integer, or zero.
+    """
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return 0
+    return value
+
+
 @dataclass(frozen=True)
 class TokenUsage:
     """Token counts reported by one completed provider attempt.
@@ -44,13 +62,9 @@ class TokenUsage:
             return NotImplemented
         return TokenUsage(
             input_tokens=self.input_tokens + other.input_tokens,
-            cached_input_tokens=(
-                self.cached_input_tokens + other.cached_input_tokens
-            ),
+            cached_input_tokens=(self.cached_input_tokens + other.cached_input_tokens),
             output_tokens=self.output_tokens + other.output_tokens,
-            reasoning_output_tokens=(
-                self.reasoning_output_tokens + other.reasoning_output_tokens
-            ),
+            reasoning_output_tokens=(self.reasoning_output_tokens + other.reasoning_output_tokens),
         )
 
     @property

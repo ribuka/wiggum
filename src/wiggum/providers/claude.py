@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
-import json
 import subprocess
 from pathlib import Path
-from typing import Any
 
 from wiggum.defaults import DEFAULT_AGENT_TIMEOUT_SEC, DEFAULT_REASONING_EFFORT
 from wiggum.env.executable_resolution import resolve_executable
-from wiggum.providers._process_common import _decode
 from wiggum.providers.constants import CLAUDE
 from wiggum.providers.contract import CommandOptions, ProviderAdapter
-from wiggum.providers.usage.token_usage import TokenUsage
+from wiggum.providers.process_output import (
+    decode_stream_output,
+    iter_json_events,
+    iter_json_events_from_text,
+    log_contains_any,
+)
+from wiggum.providers.usage.token_usage import TokenUsage, nonnegative_int
 
 __all__ = [
     "build_claude_command",
@@ -135,11 +138,7 @@ def _extract_result_text(stdout: str) -> str | None:
         The ``result`` field's text from the line whose ``type`` is
         ``"result"``, or ``None`` when no such line is present.
     """
-    for line in stdout.splitlines():
-        try:
-            payload = json.loads(line)
-        except (json.JSONDecodeError, TypeError):
-            continue
+    for payload in iter_json_events_from_text(stdout):
         if not isinstance(payload, dict) or payload.get("type") != "result":
             continue
         result = payload.get("result")
@@ -215,8 +214,8 @@ def run_claude(
     except subprocess.TimeoutExpired as error:
         # TimeoutExpired always carries bytes in stdout/stderr, even when the
         # underlying Popen was configured with text=True.
-        partial_stdout = _decode(error.stdout)
-        partial_stderr = _decode(error.stderr)
+        partial_stdout = decode_stream_output(error.stdout)
+        partial_stderr = decode_stream_output(error.stderr)
         log_path.write_text(_combine_streams(partial_stdout, partial_stderr), encoding="utf-8")
         raise
     log_path.write_text(_combine_streams(completed.stdout, completed.stderr), encoding="utf-8")
@@ -240,35 +239,13 @@ def is_retryable_claude_failure(log_path: Path) -> bool:
     bool
         ``True`` when the log contains a known transient connection failure.
     """
-    try:
-        output = log_path.read_text(encoding="utf-8")
-    except (OSError, UnicodeError):
-        return False
     markers = (
         "ECONNRESET",
         "overloaded_error",
         "rate_limit_error",
         "network error",
     )
-    return any(marker in output for marker in markers)
-
-
-def _nonnegative_int(value: Any) -> int:
-    """Return a non-negative integer value or zero for invalid input.
-
-    Parameters
-    ----------
-    value : Any
-        Untrusted value from a Claude Code JSON usage object.
-
-    Returns
-    -------
-    int
-        Parsed non-negative integer, or zero.
-    """
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        return 0
-    return value
+    return log_contains_any(log_path, markers)
 
 
 def read_claude_usage(log_path: Path) -> TokenUsage:
@@ -294,28 +271,19 @@ def read_claude_usage(log_path: Path) -> TokenUsage:
         Usage parsed from the log's ``result`` event, or all-zero usage when
         the log is unreadable or contains no such event.
     """
-    try:
-        lines = log_path.read_text(encoding="utf-8").splitlines()
-    except (OSError, UnicodeError):
-        return TokenUsage()
-
-    for line in lines:
-        try:
-            payload = json.loads(line)
-        except (json.JSONDecodeError, TypeError):
-            continue
-        if not isinstance(payload, dict) or payload.get("type") != "result":
+    for payload in iter_json_events(log_path):
+        if payload.get("type") != "result":
             continue
         usage = payload.get("usage")
         if not isinstance(usage, dict):
             continue
-        cache_read = _nonnegative_int(usage.get("cache_read_input_tokens"))
-        cache_creation = _nonnegative_int(usage.get("cache_creation_input_tokens"))
-        input_tokens = _nonnegative_int(usage.get("input_tokens"))
+        cache_read = nonnegative_int(usage.get("cache_read_input_tokens"))
+        cache_creation = nonnegative_int(usage.get("cache_creation_input_tokens"))
+        input_tokens = nonnegative_int(usage.get("input_tokens"))
         return TokenUsage(
             input_tokens=input_tokens + cache_read + cache_creation,
             cached_input_tokens=cache_read,
-            output_tokens=_nonnegative_int(usage.get("output_tokens")),
+            output_tokens=nonnegative_int(usage.get("output_tokens")),
             reasoning_output_tokens=0,
         )
     return TokenUsage()

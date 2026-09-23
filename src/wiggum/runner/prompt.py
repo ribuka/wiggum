@@ -113,4 +113,6 @@ def _display_paths(paths: RalphPaths, repo: Path) -> tuple[str, str, str]:
     tuple[str, str, str]
         Project instruction, task ledger, and progress record paths.
     """
-    return tuple(path.relative_to(repo).as_posix() for path in (paths.project, paths.tasks, paths.progress))
+    return tuple(
+        path.relative_to(repo).as_posix() for path in (paths.project, paths.tasks, paths.progress)
+    )

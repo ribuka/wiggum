@@ -18,6 +18,7 @@ from wiggum.env.process_environment import (
 )
 from wiggum.providers.constants import CODEX
 from wiggum.providers.contract import CommandOptions, ProviderAdapter
+from wiggum.providers.process_output import log_contains_any
 from wiggum.providers.usage.codex_usage import read_codex_usage
 
 __all__ = [
@@ -183,16 +184,12 @@ def is_retryable_codex_failure(log_path: Path) -> bool:
     bool
         ``True`` when the log contains a known transient connection failure.
     """
-    try:
-        output = log_path.read_text(encoding="utf-8")
-    except (OSError, UnicodeError):
-        return False
     markers = (
         "stream disconnected",
         "Connection failed: error sending request",
         "failed to connect to websocket",
     )
-    return any(marker in output for marker in markers)
+    return log_contains_any(log_path, markers)
 
 
 def build_command(options: CommandOptions) -> list[str]:

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -16,14 +15,14 @@ from wiggum.ledger.task_ledger import (
 )
 
 
-def _task(task_id: str, **overrides: Any) -> dict[str, object]:
+def _task(task_id: str, **overrides: object) -> dict[str, object]:
     """Create a valid task object with optional field overrides.
 
     Parameters
     ----------
     task_id : str
         Task identifier.
-    **overrides : Any
+    **overrides : object
         Replacement field values.
 
     Returns
@@ -61,7 +60,15 @@ def _write_ledger(path: Path, tasks: list[dict[str, object]]) -> None:
 def test_task_progress_counts_every_non_completed_status(tmp_path: Path) -> None:
     """Count pending, in-progress, and blocked tasks as incomplete."""
     path = tmp_path / "TASKS.json"
-    _write_ledger(path, [_task("TASK-001", status="completed"), _task("TASK-002", status="pending"), _task("TASK-003", status="in_progress"), _task("TASK-004", status="blocked")])
+    _write_ledger(
+        path,
+        [
+            _task("TASK-001", status="completed"),
+            _task("TASK-002", status="pending"),
+            _task("TASK-003", status="in_progress"),
+            _task("TASK-004", status="blocked"),
+        ],
+    )
 
     assert task_progress(path) == (3, 4)
 
@@ -69,7 +76,15 @@ def test_task_progress_counts_every_non_completed_status(tmp_path: Path) -> None
 def test_snapshot_selects_by_dependencies_priority_and_id(tmp_path: Path) -> None:
     """Select the lowest-priority eligible task, then its ID."""
     path = tmp_path / "TASKS.json"
-    _write_ledger(path, [_task("TASK-001", status="completed"), _task("TASK-004", priority=1, depends_on=["TASK-003"]), _task("TASK-003", priority=2, depends_on=["TASK-001"]), _task("TASK-002", priority=2, depends_on=["TASK-001"])])
+    _write_ledger(
+        path,
+        [
+            _task("TASK-001", status="completed"),
+            _task("TASK-004", priority=1, depends_on=["TASK-003"]),
+            _task("TASK-003", priority=2, depends_on=["TASK-001"]),
+            _task("TASK-002", priority=2, depends_on=["TASK-001"]),
+        ],
+    )
 
     assert task_snapshot(path) == (3, 4, "TASK-002")
 
@@ -77,7 +92,9 @@ def test_snapshot_selects_by_dependencies_priority_and_id(tmp_path: Path) -> Non
 def test_snapshot_returns_none_when_no_task_is_eligible(tmp_path: Path) -> None:
     """Report no candidate when dependencies are incomplete."""
     path = tmp_path / "TASKS.json"
-    _write_ledger(path, [_task("TASK-001", status="blocked"), _task("TASK-002", depends_on=["TASK-001"])])
+    _write_ledger(
+        path, [_task("TASK-001", status="blocked"), _task("TASK-002", depends_on=["TASK-001"])]
+    )
 
     assert task_snapshot(path) == (2, 2, None)
 
@@ -104,7 +121,9 @@ def test_read_task_contract_returns_only_selected_json_object(tmp_path: Path) ->
         (json.dumps({"tasks": [_task("TASK-001", extra="no")]}), "unknown keys"),
     ],
 )
-def test_read_ralph_tasks_rejects_invalid_json_or_schema(tmp_path: Path, document: str, message: str) -> None:
+def test_read_ralph_tasks_rejects_invalid_json_or_schema(
+    tmp_path: Path, document: str, message: str
+) -> None:
     """Reject malformed documents and invalid fixed-schema fields."""
     path = tmp_path / "TASKS.json"
     path.write_text(document, encoding="utf-8")

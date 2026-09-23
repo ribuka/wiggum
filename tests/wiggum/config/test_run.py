@@ -49,8 +49,14 @@ def test_parse_run_settings_applies_every_configured_override() -> None:
     assert settings.api_retry_count == 3
     assert settings.api_retry_interval_sec == 10
     assert settings.agent_timeout_sec == 60
-    assert settings.executables == {"codex": "/opt/codex", "copilot": "copilot", "claude": "/opt/claude"}
-    assert settings.codex == CodexRunSettings(tool_output_token_limit=500, model_verbosity="high", lean=True)
+    assert settings.executables == {
+        "codex": "/opt/codex",
+        "copilot": "copilot",
+        "claude": "/opt/claude",
+    }
+    assert settings.codex == CodexRunSettings(
+        tool_output_token_limit=500, model_verbosity="high", lean=True
+    )
 
 
 @pytest.mark.parametrize(
@@ -63,7 +69,10 @@ def test_parse_run_settings_applies_every_configured_override() -> None:
         ({"manage_process_env": "yes"}, r"\[run\]\.manage_process_env must be a boolean"),
         ({"api_retry_count": -1}, r"\[run\]\.api_retry_count must be a non-negative integer"),
         ({"api_retry_count": True}, r"\[run\]\.api_retry_count must be a non-negative integer"),
-        ({"api_retry_interval_sec": -1}, r"\[run\]\.api_retry_interval_sec must be a non-negative integer"),
+        (
+            {"api_retry_interval_sec": -1},
+            r"\[run\]\.api_retry_interval_sec must be a non-negative integer",
+        ),
         ({"agent_timeout_sec": 0}, r"\[run\]\.agent_timeout_sec must be at least 1"),
         ({"executable": "not-a-table"}, r"\[run\.executable\] must be a table"),
         ({"executable": {"unsupported": "x"}}, r"\[run\.executable\] has unsupported keys"),

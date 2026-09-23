@@ -6,11 +6,21 @@ import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 TASK_ID_PATTERN = re.compile(r"TASK-\d{3}")
 TASK_STATUSES = frozenset({"pending", "in_progress", "completed", "blocked"})
-_TASK_KEYS = frozenset({"id", "title", "status", "priority", "depends_on", "requirements", "tests", "acceptance_commands"})
+_TASK_KEYS = frozenset(
+    {
+        "id",
+        "title",
+        "status",
+        "priority",
+        "depends_on",
+        "requirements",
+        "tests",
+        "acceptance_commands",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -38,12 +48,12 @@ class RalphTask:
     contract: dict[str, object]
 
 
-def _require_string(value: Any, field: str, task_id: str) -> str:
+def _require_string(value: object, field: str, task_id: str) -> str:
     """Validate and return a non-empty task string field.
 
     Parameters
     ----------
-    value : Any
+    value : object
         Value declared in the JSON task object.
     field : str
         Field being validated.
@@ -61,7 +71,7 @@ def _require_string(value: Any, field: str, task_id: str) -> str:
 
 
 def _require_string_array(
-    value: Any,
+    value: object,
     field: str,
     task_id: str,
     *,
@@ -71,7 +81,7 @@ def _require_string_array(
 
     Parameters
     ----------
-    value : Any
+    value : object
         Value declared in the JSON task object.
     field : str
         Field being validated.
@@ -91,12 +101,12 @@ def _require_string_array(
     return values
 
 
-def _parse_task(value: Any, index: int) -> RalphTask:
+def _parse_task(value: object, index: int) -> RalphTask:
     """Validate one JSON task object.
 
     Parameters
     ----------
-    value : Any
+    value : object
         Candidate task object.
     index : int
         Zero-based task position for diagnostics when its identifier is invalid.
@@ -108,7 +118,7 @@ def _parse_task(value: Any, index: int) -> RalphTask:
     """
     label = f"task at index {index}"
     if not isinstance(value, dict):
-        raise ValueError(f"{label} must be an object")  # noqa: TRY004
+        raise ValueError(f"{label} must be an object")
     keys = set(value)
     if keys != _TASK_KEYS:
         missing = sorted(_TASK_KEYS - keys)
@@ -177,7 +187,12 @@ def read_ralph_tasks(tasks_path: Path) -> tuple[RalphTask, ...]:
     for task in tasks:
         if task.task_id in task.dependencies:
             raise ValueError(f"{task.task_id} cannot depend on itself")
-    missing_dependencies = {dependency for task in tasks for dependency in task.dependencies if dependency not in task_ids}
+    missing_dependencies = {
+        dependency
+        for task in tasks
+        for dependency in task.dependencies
+        if dependency not in task_ids
+    }
     if missing_dependencies:
         raise ValueError("unknown task dependencies: " + ", ".join(sorted(missing_dependencies)))
     return tasks
@@ -219,9 +234,18 @@ def task_snapshot(tasks_path: Path) -> tuple[int, int, str | None]:
     """
     tasks = read_ralph_tasks(tasks_path)
     statuses = {task.task_id: task.status for task in tasks}
-    candidates = [task for task in tasks if task.status == "pending" and all(statuses[dependency] == "completed" for dependency in task.dependencies)]
+    candidates = [
+        task
+        for task in tasks
+        if task.status == "pending"
+        and all(statuses[dependency] == "completed" for dependency in task.dependencies)
+    ]
     selected = min(candidates, key=lambda task: (task.priority, task.task_id), default=None)
-    return (sum(task.status != "completed" for task in tasks), len(tasks), selected.task_id if selected is not None else None)
+    return (
+        sum(task.status != "completed" for task in tasks),
+        len(tasks),
+        selected.task_id if selected is not None else None,
+    )
 
 
 def task_progress(tasks_path: Path) -> tuple[int, int]:

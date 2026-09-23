@@ -7,9 +7,9 @@ from pathlib import Path
 
 from wiggum.defaults import DEFAULT_AGENT_TIMEOUT_SEC, DEFAULT_REASONING_EFFORT
 from wiggum.env.executable_resolution import resolve_executable
-from wiggum.providers._process_common import _decode
 from wiggum.providers.constants import COPILOT
 from wiggum.providers.contract import CommandOptions, ProviderAdapter
+from wiggum.providers.process_output import decode_stream_output, log_contains_any
 from wiggum.providers.usage.token_usage import TokenUsage
 
 
@@ -140,8 +140,8 @@ def run_copilot(
     except subprocess.TimeoutExpired as error:
         # TimeoutExpired always carries bytes in stdout/stderr, even when the
         # underlying Popen was configured with text=True.
-        partial_stdout = _decode(error.stdout)
-        partial_stderr = _decode(error.stderr)
+        partial_stdout = decode_stream_output(error.stdout)
+        partial_stderr = decode_stream_output(error.stderr)
         log_path.write_text(partial_stdout + partial_stderr, encoding="utf-8")
         raise
     log_path.write_text(completed.stdout + completed.stderr, encoding="utf-8")
@@ -163,16 +163,12 @@ def is_retryable_copilot_failure(log_path: Path) -> bool:
     bool
         ``True`` when the log contains a known transient connection failure.
     """
-    try:
-        output = log_path.read_text(encoding="utf-8")
-    except (OSError, UnicodeError):
-        return False
     markers = (
         "ECONNRESET",
         "rate limit exceeded",
         "network error",
     )
-    return any(marker in output for marker in markers)
+    return log_contains_any(log_path, markers)
 
 
 def build_command(options: CommandOptions) -> list[str]:
