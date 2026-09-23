@@ -63,7 +63,9 @@ def test_load_configuration_defaults_run_settings_when_run_table_is_absent(tmp_p
             api_retry_interval_sec=5,
             agent_timeout_sec=1800,
             executables=dict(DEFAULT_EXECUTABLES),
-            codex=CodexRunSettings(tool_output_token_limit=12_000, model_verbosity="low", lean=False),
+            codex=CodexRunSettings(
+                tool_output_token_limit=12_000, model_verbosity="low", lean=False
+            ),
         ),
     )
 

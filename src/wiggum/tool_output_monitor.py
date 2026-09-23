@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+
+from wiggum.providers.process_output import iter_json_events
 
 _TOOL_ITEM_TYPES = frozenset({"command_execution", "mcp_tool_call"})
-_TRUNCATION_KEYS = frozenset(
-    {"truncated", "is_truncated", "output_truncated", "was_truncated"}
-)
+_TRUNCATION_KEYS = frozenset({"truncated", "is_truncated", "output_truncated", "was_truncated"})
 
 
 @dataclass(frozen=True)
@@ -29,12 +27,12 @@ class ToolOutputMonitor:
     truncated_outputs: int = 0
 
 
-def _contains_truncation_signal(value: Any) -> bool:
+def _contains_truncation_signal(value: object) -> bool:
     """Return whether a JSON value contains an explicit truncation signal.
 
     Parameters
     ----------
-    value : Any
+    value : object
         Untrusted value from a Codex JSON event.
 
     Returns
@@ -72,19 +70,10 @@ def read_tool_output_monitor(log_path: Path) -> ToolOutputMonitor:
     ToolOutputMonitor
         Counts of completed tool outputs and explicit truncation signals.
     """
-    try:
-        lines = log_path.read_text(encoding="utf-8").splitlines()
-    except (OSError, UnicodeError):
-        return ToolOutputMonitor()
-
     outputs = 0
     truncated_outputs = 0
-    for line in lines:
-        try:
-            event = json.loads(line)
-        except (json.JSONDecodeError, TypeError):
-            continue
-        if not isinstance(event, dict) or event.get("type") != "item.completed":
+    for event in iter_json_events(log_path):
+        if event.get("type") != "item.completed":
             continue
         item = event.get("item")
         if not isinstance(item, dict) or item.get("type") not in _TOOL_ITEM_TYPES:

@@ -45,7 +45,7 @@ def test_scaffold_refuses_to_overwrite_existing_files_by_default(tmp_path: Path)
     destination.parent.mkdir()
     destination.write_text("existing\n", encoding="utf-8")
 
-    with pytest.raises(FileExistsError, match="TASKS.json"):
+    with pytest.raises(FileExistsError, match=r"TASKS\.json"):
         scaffold(tmp_path)
 
     assert destination.read_text(encoding="utf-8") == "existing\n"

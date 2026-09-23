@@ -11,7 +11,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from wiggum.config.document import ConfigurationError
+from wiggum.config.document import (
+    ConfigurationError,
+    reject_unknown_keys,
+    require_int_in_range,
+    require_optional_int_in_range,
+)
 from wiggum.defaults import (
     DEFAULT_AGENT_TIMEOUT_SEC,
     DEFAULT_API_RETRY_COUNT,
@@ -108,31 +113,33 @@ def parse_run_settings(document: dict[str, object]) -> RunSettings:
     run_table = document.get("run", {})
     if not isinstance(run_table, dict):
         raise ConfigurationError("[run] must be a table")
-    unknown_keys = set(run_table) - _ALLOWED_RUN_KEYS
-    if unknown_keys:
-        raise ConfigurationError(f"[run] has unsupported keys: {', '.join(sorted(unknown_keys))}")
+    reject_unknown_keys(run_table, _ALLOWED_RUN_KEYS, "[run]")
 
     manage_process_env = run_table.get("manage_process_env", True)
     if not isinstance(manage_process_env, bool):
         raise ConfigurationError("[run].manage_process_env must be a boolean")
 
-    api_retry_count = run_table.get("api_retry_count", DEFAULT_API_RETRY_COUNT)
-    if api_retry_count is not None and (
-        not isinstance(api_retry_count, int) or isinstance(api_retry_count, bool) or api_retry_count < 0
-    ):
-        raise ConfigurationError("[run].api_retry_count must be a non-negative integer")
-
-    api_retry_interval_sec = run_table.get("api_retry_interval_sec", DEFAULT_API_RETRY_INTERVAL_SEC)
-    if (
-        not isinstance(api_retry_interval_sec, int)
-        or isinstance(api_retry_interval_sec, bool)
-        or api_retry_interval_sec < 0
-    ):
-        raise ConfigurationError("[run].api_retry_interval_sec must be a non-negative integer")
-
-    agent_timeout_sec = run_table.get("agent_timeout_sec", DEFAULT_AGENT_TIMEOUT_SEC)
-    if not isinstance(agent_timeout_sec, int) or isinstance(agent_timeout_sec, bool) or agent_timeout_sec < 1:
-        raise ConfigurationError("[run].agent_timeout_sec must be at least 1")
+    api_retry_count = require_optional_int_in_range(
+        run_table,
+        "api_retry_count",
+        "[run].api_retry_count",
+        default=DEFAULT_API_RETRY_COUNT,
+        minimum=0,
+    )
+    api_retry_interval_sec = require_int_in_range(
+        run_table,
+        "api_retry_interval_sec",
+        "[run].api_retry_interval_sec",
+        default=DEFAULT_API_RETRY_INTERVAL_SEC,
+        minimum=0,
+    )
+    agent_timeout_sec = require_int_in_range(
+        run_table,
+        "agent_timeout_sec",
+        "[run].agent_timeout_sec",
+        default=DEFAULT_AGENT_TIMEOUT_SEC,
+        minimum=1,
+    )
 
     return RunSettings(
         manage_process_env=manage_process_env,
@@ -167,11 +174,7 @@ def _parse_executables(value: object) -> dict[str, str]:
     """
     if not isinstance(value, dict):
         raise ConfigurationError("[run.executable] must be a table")
-    unknown_keys = set(value) - set(PROVIDERS)
-    if unknown_keys:
-        raise ConfigurationError(
-            f"[run.executable] has unsupported keys: {', '.join(sorted(unknown_keys))}"
-        )
+    reject_unknown_keys(value, set(PROVIDERS), "[run.executable]")
     executables = dict(DEFAULT_EXECUTABLES)
     for provider, executable in value.items():
         if not isinstance(executable, str) or not executable.strip():
@@ -200,21 +203,21 @@ def _parse_codex_settings(value: object) -> CodexRunSettings:
     """
     if not isinstance(value, dict):
         raise ConfigurationError("[run.codex] must be a table")
-    unknown_keys = set(value) - _ALLOWED_CODEX_KEYS
-    if unknown_keys:
-        raise ConfigurationError(f"[run.codex] has unsupported keys: {', '.join(sorted(unknown_keys))}")
+    reject_unknown_keys(value, _ALLOWED_CODEX_KEYS, "[run.codex]")
 
-    tool_output_token_limit = value.get("tool_output_token_limit", DEFAULT_TOOL_OUTPUT_TOKEN_LIMIT)
-    if (
-        not isinstance(tool_output_token_limit, int)
-        or isinstance(tool_output_token_limit, bool)
-        or tool_output_token_limit < 1
-    ):
-        raise ConfigurationError("[run.codex].tool_output_token_limit must be at least 1")
+    tool_output_token_limit = require_int_in_range(
+        value,
+        "tool_output_token_limit",
+        "[run.codex].tool_output_token_limit",
+        default=DEFAULT_TOOL_OUTPUT_TOKEN_LIMIT,
+        minimum=1,
+    )
 
     model_verbosity = value.get("model_verbosity", DEFAULT_MODEL_VERBOSITY)
     if model_verbosity not in MODEL_VERBOSITIES:
-        raise ConfigurationError(f"[run.codex].model_verbosity has an unsupported value: {model_verbosity}")
+        raise ConfigurationError(
+            f"[run.codex].model_verbosity has an unsupported value: {model_verbosity}"
+        )
 
     lean = value.get("lean", False)
     if not isinstance(lean, bool):

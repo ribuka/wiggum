@@ -86,7 +86,9 @@ def test_run_claude_extracts_the_result_line_from_a_multi_event_stream(tmp_path:
     output_path = tmp_path / "last-message.txt"
     events = [
         json.dumps({"type": "system", "subtype": "init"}),
-        json.dumps({"type": "assistant", "message": {"content": [{"type": "text", "text": "..."}]}}),
+        json.dumps(
+            {"type": "assistant", "message": {"content": [{"type": "text", "text": "..."}]}}
+        ),
         json.dumps(
             {
                 "type": "result",

@@ -105,10 +105,7 @@ def test_run_copilot_excludes_stderr_from_the_last_message(tmp_path: Path) -> No
     command = [
         sys.executable,
         "-c",
-        (
-            "import sys; sys.stderr.write('diagnostic noise\\n'); "
-            "print(sys.stdin.read(), end='')"
-        ),
+        ("import sys; sys.stderr.write('diagnostic noise\\n'); print(sys.stdin.read(), end='')"),
     ]
 
     completed = run_copilot(

@@ -15,6 +15,107 @@ class ConfigurationError(ValueError):
     """Raised when a repository's wiggum configuration is unusable."""
 
 
+def reject_unknown_keys(table: dict[str, object], allowed: set[str], label: str) -> None:
+    """Reject keys in a configuration table that are not supported.
+
+    Parameters
+    ----------
+    table : dict[str, object]
+        Parsed TOML table to validate.
+    allowed : set[str]
+        Names accepted in ``table``.
+    label : str
+        Table name included in a validation error.
+
+    Raises
+    ------
+    ConfigurationError
+        If ``table`` includes an unsupported key.
+    """
+    unknown_keys = set(table) - allowed
+    if unknown_keys:
+        raise ConfigurationError(f"{label} has unsupported keys: {', '.join(sorted(unknown_keys))}")
+
+
+def require_int_in_range(
+    table: dict[str, object],
+    key: str,
+    label: str,
+    *,
+    default: int,
+    minimum: int,
+) -> int:
+    """Read a required-range integer from a configuration table.
+
+    Parameters
+    ----------
+    table : dict[str, object]
+        Parsed TOML table containing the setting.
+    key : str
+        Setting name in ``table``.
+    label : str
+        Fully-qualified setting name for validation errors.
+    default : int
+        Value used when ``key`` is absent.
+    minimum : int
+        Inclusive lower bound.
+
+    Returns
+    -------
+    int
+        Validated configured or default value.
+
+    Raises
+    ------
+    ConfigurationError
+        If the value is not an integer at least ``minimum``.
+    """
+    value = table.get(key, default)
+    if not isinstance(value, int) or isinstance(value, bool) or value < minimum:
+        qualifier = "a non-negative integer" if minimum == 0 else f"at least {minimum}"
+        raise ConfigurationError(f"{label} must be {qualifier}")
+    return value
+
+
+def require_optional_int_in_range(
+    table: dict[str, object],
+    key: str,
+    label: str,
+    *,
+    default: int | None,
+    minimum: int,
+) -> int | None:
+    """Read an optional required-range integer from a configuration table.
+
+    Parameters
+    ----------
+    table : dict[str, object]
+        Parsed TOML table containing the setting.
+    key : str
+        Setting name in ``table``.
+    label : str
+        Fully-qualified setting name for validation errors.
+    default : int | None
+        Value used when ``key`` is absent.
+    minimum : int
+        Inclusive lower bound for non-null values.
+
+    Returns
+    -------
+    int | None
+        Validated configured or default value.
+
+    Raises
+    ------
+    ConfigurationError
+        If a non-null value is not an integer at least ``minimum``.
+    """
+    value = table.get(key, default)
+    if value is None:
+        return None
+    return require_int_in_range({key: value}, key, label, default=0, minimum=minimum)
+
+
 def read_document(repo: Path) -> dict[str, object]:
     """Read and validate the top-level shape of ``wiggum/config.toml``.
 
@@ -39,14 +140,22 @@ def read_document(repo: Path) -> dict[str, object]:
     try:
         document = tomllib.loads(configuration_path.read_text(encoding="utf-8"))
     except FileNotFoundError as error:
-        raise ConfigurationError(f"Required configuration does not exist: {configuration_path}") from error
+        raise ConfigurationError(
+            f"Required configuration does not exist: {configuration_path}"
+        ) from error
     except (OSError, UnicodeError, tomllib.TOMLDecodeError) as error:
         raise ConfigurationError(f"Invalid configuration: {configuration_path}: {error}") from error
     if not isinstance(document, dict):
         raise ConfigurationError("configuration must be a TOML table")
-    unknown_keys = set(document) - _REQUIRED_TOP_LEVEL_KEYS - _OPTIONAL_TOP_LEVEL_KEYS
-    if unknown_keys or not _REQUIRED_TOP_LEVEL_KEYS.issubset(document):
-        raise ConfigurationError("configuration must contain [paths] and may optionally contain [dir] and [run]")
+    if not _REQUIRED_TOP_LEVEL_KEYS.issubset(document):
+        raise ConfigurationError(
+            "configuration must contain [paths] and may optionally contain [dir] and [run]"
+        )
+    reject_unknown_keys(
+        document,
+        _REQUIRED_TOP_LEVEL_KEYS | _OPTIONAL_TOP_LEVEL_KEYS,
+        "configuration",
+    )
     return document
 
 

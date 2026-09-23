@@ -90,9 +90,12 @@ def _configure_dry_run(monkeypatch: pytest.MonkeyPatch, repo: Path) -> None:
         Expected Git repository root.
     """
     monkeypatch.setattr(codex_provider_module, "resolve_codex_executable", lambda value: value)
-    require_git_output_stub = (
-        lambda target, *args: str(repo) if args == ("rev-parse", "--show-toplevel") else "before"
-    )
+
+    def require_git_output_stub(target: Path, *args: str) -> str:
+        """Return deterministic Git output for the configured test repository."""
+        del target
+        return str(repo) if args == ("rev-parse", "--show-toplevel") else "before"
+
     monkeypatch.setattr(validation_module, "require_git_output", require_git_output_stub)
     monkeypatch.setattr(loop_module, "require_git_output", require_git_output_stub)
     monkeypatch.setattr(validation_module, "require_clean_worktree", lambda repo: None)
@@ -106,7 +109,10 @@ def test_run_uses_configured_tasks_path_and_injects_only_selected_contract(
     """Use configured tasks and keep unselected contracts out of the prompt."""
     _write_tasks(
         tmp_path / "wiggum" / "TASKS.json",
-        [_task("TASK-001", priority=2, title="Later"), _task("TASK-002", priority=1, title="Selected")],
+        [
+            _task("TASK-001", priority=2, title="Later"),
+            _task("TASK-002", priority=1, title="Selected"),
+        ],
     )
     _configure_dry_run(monkeypatch, tmp_path)
 
@@ -178,9 +184,12 @@ def test_run_dry_run_builds_a_claude_command(
         "resolve_claude_executable",
         lambda value: value,
     )
-    require_git_output_stub = (
-        lambda target, *args: str(tmp_path) if args == ("rev-parse", "--show-toplevel") else "before"
-    )
+
+    def require_git_output_stub(target: Path, *args: str) -> str:
+        """Return deterministic Git output for the temporary repository."""
+        del target
+        return str(tmp_path) if args == ("rev-parse", "--show-toplevel") else "before"
+
     monkeypatch.setattr(validation_module, "require_git_output", require_git_output_stub)
     monkeypatch.setattr(loop_module, "require_git_output", require_git_output_stub)
     monkeypatch.setattr(validation_module, "require_clean_worktree", lambda repo: None)

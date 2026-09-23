@@ -5,7 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from wiggum.config.document import ConfigurationError, resolve_optional_path
+from wiggum.config.document import (
+    ConfigurationError,
+    reject_unknown_keys,
+    resolve_optional_path,
+)
 
 _ALLOWED_DIR_KEYS = {"log", "temp", "uv_cache"}
 
@@ -55,12 +59,12 @@ def parse_dir_settings(repo: Path, document: dict[str, object]) -> DirSettings:
     dir_table = document.get("dir", {})
     if not isinstance(dir_table, dict):
         raise ConfigurationError("[dir] must be a table")
-    unknown_keys = set(dir_table) - _ALLOWED_DIR_KEYS
-    if unknown_keys:
-        raise ConfigurationError(f"[dir] has unsupported keys: {', '.join(sorted(unknown_keys))}")
+    reject_unknown_keys(dir_table, _ALLOWED_DIR_KEYS, "[dir]")
 
     return DirSettings(
         log=resolve_optional_path(repo, "[dir].log", dir_table.get("log"), Path("logs")),
         temp=resolve_optional_path(repo, "[dir].temp", dir_table.get("temp"), Path("tmp")),
-        uv_cache=resolve_optional_path(repo, "[dir].uv_cache", dir_table.get("uv_cache"), Path(".uv-cache")),
+        uv_cache=resolve_optional_path(
+            repo, "[dir].uv_cache", dir_table.get("uv_cache"), Path(".uv-cache")
+        ),
     )

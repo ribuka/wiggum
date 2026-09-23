@@ -70,7 +70,9 @@ def parse_paths(repo: Path, document: dict[str, object]) -> RalphPaths:
         or not required_keys.issubset(values)
         or set(values) - required_keys - _OPTIONAL_PATH_KEYS
     ):
-        raise ConfigurationError("[paths] must contain only tasks, project, progress, and prompt_file")
+        raise ConfigurationError(
+            "[paths] must contain only tasks, project, progress, and prompt_file"
+        )
     resolved_paths = {
         name: resolve_required_path(repo, f"[paths].{name}", values[name]) for name in required_keys
     }

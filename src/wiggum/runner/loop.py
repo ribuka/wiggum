@@ -157,9 +157,7 @@ def _run(
     try:
         incomplete_tasks, total_tasks, selected_task_id = task_snapshot(paths.tasks)
         selected_task_contract = (
-            None
-            if selected_task_id is None
-            else read_task_contract(paths.tasks, selected_task_id)
+            None if selected_task_id is None else read_task_contract(paths.tasks, selected_task_id)
         )
     except (OSError, UnicodeError, ValueError) as error:
         logger.error("{}", error)
@@ -318,7 +316,9 @@ def _run(
                     logs_dir,
                     started_at,
                     selected_task_id,
-                    f"{provider}-failure" if exit_code == ExitCode.CODEX_FAILURE else "protocol-error",
+                    f"{provider}-failure"
+                    if exit_code == ExitCode.CODEX_FAILURE
+                    else "protocol-error",
                 )
                 logger.error("{}; see {}", failure, log_path.relative_to(repo))
                 output_path.unlink(missing_ok=True)
