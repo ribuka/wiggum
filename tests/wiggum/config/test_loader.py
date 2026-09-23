@@ -124,6 +124,7 @@ def test_load_configuration_requires_config_file(tmp_path: Path) -> None:
         ("", "configuration must contain \\[paths\\]"),
         ("[paths]\ntasks = 1\nproject = 'a'\nprogress = 'b'\n", "must be a non-empty string"),
         ("[unexpected]\n", "configuration must contain \\[paths\\]"),
+        ("[paths]\n[unexpected]\n", "configuration has unsupported keys: unexpected"),
         ("not valid toml", "Invalid configuration"),
     ],
 )

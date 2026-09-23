@@ -44,10 +44,10 @@ def iter_json_events(log_path: Path) -> Iterator[dict[str, Any]]:
         are ignored.
     """
     try:
-        lines = log_path.read_text(encoding="utf-8").splitlines()
+        output = log_path.read_text(encoding="utf-8")
     except (OSError, UnicodeError):
         return
-    yield from iter_json_events_from_text("\n".join(lines))
+    yield from iter_json_events_from_text(output)
 
 
 def iter_json_events_from_text(output: str) -> Iterator[dict[str, Any]]:
